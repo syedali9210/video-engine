@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- a film's review link: watch it, and leave a note at a moment and a spot on the frame (src/review.tsx) -->
+    <title>Review</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&display=swap" rel="stylesheet" />
+    <script>
+      try {
+        var saved = localStorage.getItem("anim-engine:dark");
+        document.documentElement.classList.toggle("dark", saved ? JSON.parse(saved) : matchMedia("(prefers-color-scheme: dark)").matches);
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/review.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,21 @@
+// Site flyover — every tunable property. The Animation Engine rewrites this file on export.
+export const params = {
+  name: "MailCheap",
+  accent: "#6d5dfc",
+  page: "",
+  screen: "",
+  mark: "",
+  url: "mailcheap.ai/campaigns/6f3a9c",
+  hero: "Run your newsletter|83% cheaper than beehiiv",
+  sub: "You only pay for the emails you send, not for|your dormant subscribers. From $19 a month.",
+  features: "Everything you need|to run a newsletter",
+  ai: "Your AI agent can do|everything you can",
+  aiLine: "ChatGPT writes your next issue",
+  why: "Why I built",
+  plans: "Every feature, on every plan",
+  price: "$19",
+  faq: "Questions",
+  close: "Bring your list.|Keep the difference.",
+  campaign: "Fastest growing startups of the week",
+  subject: "3 startups that grew over 1,000%",
+};

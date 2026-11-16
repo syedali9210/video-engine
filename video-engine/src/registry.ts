@@ -1,0 +1,97 @@
+import type { ComponentType } from "react";
+import type { FilmSpec } from "./studio/shots";
+
+export type Value = string | number | boolean;
+export type Values = Record<string, Value>;
+
+/** What a param means to the suggestion rules (Emil Kowalski's timing/easing guidance). */
+export type Role = "enter" | "exit" | "press" | "ui" | "stagger" | "scaleFrom" | "bounce" | "blur" | "dpr" | "resolution";
+/** `limit`: the longest a "ui"/"enter" duration should run here (Emil: 300ms default; modals and drawers up to 500ms). */
+type Base = { label: string; group?: string; hint?: string; reload?: boolean; role?: Role; limit?: number };
+export type ParamSpec = Base &
+  (
+    | { type: "color" }
+    | { type: "number"; min: number; max: number; step?: number; unit?: string }
+    | { type: "select"; options: string[] }
+    | { type: "boolean" }
+    | { type: "text" }
+    | { type: "easing" }
+    /** another animation from the library, by id: what a film shows on its screens */
+    | { type: "anim" }
+    /** what fills one of a film's screens: "" its own drawing, "anim:<id>" a library animation, "image:<url>" or
+        "video:<url>" the user's own (kit.tsx `Slot`) */
+    | { type: "screen" }
+  );
+
+export const CATEGORIES = [
+  "Shaders & GPU",
+  "Characters",
+  "Chat & AI",
+  "Cards & Reveals",
+  "Navigation",
+  "Celebration",
+  "UI Patterns",
+  "Swiggy App",
+  "Launch films",
+] as const;
+export type Category = (typeof CATEGORIES)[number];
+
+/** How it behaves, in Emil Kowalski's terms: what starts it, and how often a user sees it. */
+export type Trigger = "ambient" | "interaction" | "hover" | "gesture" | "sequence" | "state";
+export type Frequency = "constant" | "frequent" | "occasional" | "rare";
+
+export interface AnimMeta {
+  /** Folder name — filled in by the registry. */
+  id: string;
+  name: string;
+  category: Category;
+  /** Within its category, lower comes first (default 0), then by name. */
+  order?: number;
+  tech: string[];
+  blurb: string;
+  /** Where the original lives on disk. */
+  source: string;
+  behavior: { trigger: Trigger; frequency: Frequency };
+  /** What the original source does under prefers-reduced-motion. */
+  reducedMotion: "full" | "partial" | "none";
+  reducedMotionNote: string;
+  params: Values;
+  schema: Record<string, ParamSpec>;
+  /** React animations: the component receives the live values as `p`. */
+  load?: () => Promise<{ default: ComponentType<{ p: any }> }>;
+  /** Static-page animations live in /public/anim/<id>/index.html. */
+  html?: boolean;
+  layout?: "center" | "fill";
+  /** A UI element users meet over and over — Emil's sub-300ms rules apply. */
+  ui?: boolean;
+  /** Set when part of it animates a keyboard-initiated action (describes which). */
+  keyboard?: string;
+  /** Whether hover effects are gated behind (hover: hover) and (pointer: fine). */
+  hover?: "gated" | "ungated";
+  deps?: string[];
+  /** Other animation folders this one imports (bundled into its export). */
+  includes?: string[];
+  /** Files from /public bundled into the export. */
+  assets?: string[];
+  /** The library card's still (npm run posters): `at` ms into the animation (default 1800), cropped around `y`, a
+      fraction of the screen's height (default: the top for a full-screen app, else the middle). */
+  poster?: { at?: number; y?: number };
+  /** The product it's from, when it's one app's screen ("Swiggy"): the name a launch film uses for it. */
+  brand?: string;
+  /** A launch film as a template (studio/shots.ts): its frame, length, look, and the shots it cuts into, each tagged
+      with what it does in a film, so it's cut at its own cuts and its shots can be cast into other films. */
+  film?: FilmSpec;
+}
+
+const found = import.meta.glob<{ default: Omit<AnimMeta, "id"> }>("./animations/*/meta.ts", { eager: true });
+
+export const ANIMS: AnimMeta[] = Object.entries(found)
+  .map(([path, mod]) => ({ ...mod.default, id: path.split("/")[2] }))
+  .sort((a, b) => CATEGORIES.indexOf(a.category) - CATEGORIES.indexOf(b.category) || (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name));
+
+export const byId = (id: string | null) => ANIMS.find((a) => a.id === id);
+
+export const htmlUrl = (a: AnimMeta) => `/anim/${a.id}/index.html`;
+
+/** Defaults, plus whatever the user changed. */
+export const withDefaults = (a: AnimMeta, v?: Values): Values => ({ ...a.params, ...v });

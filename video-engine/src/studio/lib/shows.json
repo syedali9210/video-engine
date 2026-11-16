@@ -1,0 +1,323 @@
+{
+ "film-blueprint/opening": [
+  "start"
+ ],
+ "film-blueprint/picture": [
+  "photo"
+ ],
+ "film-blueprint/rules": [
+  "account",
+  "handle",
+  "post",
+  "overlay",
+  "tips",
+  "stats",
+  "photo"
+ ],
+ "film-blueprint/phone": [
+  "account",
+  "handle",
+  "post",
+  "overlay",
+  "photo"
+ ],
+ "film-blueprint/proof": [
+  "stats"
+ ],
+ "film-blueprint/close": [],
+ "film-blueprint/again": [
+  "start"
+ ],
+ "film-spotlight/your-app": [
+  "user",
+  "tabs",
+  "dashboard"
+ ],
+ "film-spotlight/introducing": [],
+ "film-spotlight/the-feature": [
+  "tags"
+ ],
+ "film-spotlight/four-words": [
+  "pages",
+  "headline",
+  "screen2"
+ ],
+ "film-spotlight/the-mark": [
+  "icon"
+ ],
+ "film-spotlight/the-icon": [
+  "icon"
+ ],
+ "film-horizon/grid": [],
+ "film-horizon/horizon": [
+  "promise"
+ ],
+ "film-horizon/panels": [
+  "unit"
+ ],
+ "film-horizon/addresses": [
+  "import"
+ ],
+ "film-horizon/pills": [
+  "pills"
+ ],
+ "film-horizon/orbit": [
+  "orbit"
+ ],
+ "film-horizon/switch": [
+  "name",
+  "switch",
+  "unit"
+ ],
+ "film-horizon/end-card": [
+  "name",
+  "tagline",
+  "url"
+ ],
+ "film-liquid/liquid": [],
+ "film-liquid/ask": [
+  "ask"
+ ],
+ "film-liquid/prompt": [
+  "name",
+  "prompt"
+ ],
+ "film-liquid/think": [
+  "name",
+  "thinking",
+  "logo"
+ ],
+ "reel-desk/opening": [
+  "caption"
+ ],
+ "reel-desk/the-prompt": [
+  "caption",
+  "ask",
+  "prompt",
+  "model",
+  "effort"
+ ],
+ "reel-desk/while-it-thinks": [
+  "caption",
+  "prompt",
+  "thinking"
+ ],
+ "reel-desk/word-drum": [
+  "caption",
+  "verbs"
+ ],
+ "reel-desk/the-product": [
+  "caption",
+  "together"
+ ],
+ "reel-desk/ring-of-fire": [
+  "caption",
+  "everything"
+ ],
+ "reel-desk/sunset": [
+  "caption",
+  "line"
+ ],
+ "reel-desk/the-sun": [
+  "caption"
+ ],
+ "film-glide/wide": [
+  "tracks",
+  "sections",
+  "clips",
+  "screen"
+ ],
+ "film-glide/macro": [
+  "tracks",
+  "sections",
+  "clips",
+  "screen"
+ ],
+ "film-glide/play": [
+  "tracks",
+  "sections",
+  "clips",
+  "screen"
+ ],
+ "film-pop/hook": [
+  "hook"
+ ],
+ "film-pop/amount": [
+  "share"
+ ],
+ "film-pop/sky": [
+  "photo1",
+  "photo4"
+ ],
+ "film-pop/mark": [
+  "words"
+ ],
+ "film-pop/cards": [
+  "social"
+ ],
+ "film-pop/end-card": [],
+ "film-mosaic/the-prompt": [
+  "name",
+  "log",
+  "tools"
+ ],
+ "film-mosaic/the-making": [
+  "model",
+  "made"
+ ],
+ "film-mosaic/the-page": [
+  "name",
+  "log",
+  "connect"
+ ],
+ "film-mosaic/ready": [
+  "name",
+  "model",
+  "begin",
+  "ready"
+ ],
+ "film-quad/the-feature": [
+  "feature",
+  "action",
+  "received",
+  "screen2"
+ ],
+ "film-quad/your-name": [
+  "app",
+  "than",
+  "balances",
+  "screen1",
+  "screen2",
+  "screen3"
+ ],
+ "film-quad/deposit": [
+  "app",
+  "would",
+  "balances",
+  "screen1",
+  "screen3"
+ ],
+ "film-quad/received": [
+  "name",
+  "intro",
+  "screen3"
+ ],
+ "film-flyover/the-hero": [
+  "name",
+  "url",
+  "hero",
+  "sub",
+  "features",
+  "campaign",
+  "subject",
+  "page",
+  "mark",
+  "screen"
+ ],
+ "film-flyover/down-the-page": [
+  "name",
+  "features",
+  "ai",
+  "aiLine",
+  "why",
+  "plans",
+  "price",
+  "page"
+ ],
+ "film-flyover/the-whole-page": [
+  "name",
+  "url",
+  "hero",
+  "sub",
+  "features",
+  "ai",
+  "aiLine",
+  "why",
+  "plans",
+  "price",
+  "faq",
+  "campaign",
+  "subject",
+  "close",
+  "page",
+  "mark",
+  "screen"
+ ],
+ "film-flyover/into-the-app": [
+  "name",
+  "url",
+  "hero",
+  "sub",
+  "features",
+  "campaign",
+  "subject",
+  "page",
+  "mark",
+  "screen"
+ ],
+ "film-flyover/the-closing-line": [
+  "name",
+  "url",
+  "campaign",
+  "subject",
+  "close",
+  "screen",
+  "mark"
+ ],
+ "reel-sketch/sketch": [
+  "made",
+  "cta"
+ ],
+ "reel-sketch/your-mark": [
+  "made",
+  "cta"
+ ],
+ "reel-sketch/search-in-the-rain": [
+  "made",
+  "query",
+  "cta"
+ ],
+ "reel-sketch/playlist": [
+  "name",
+  "made",
+  "playlist",
+  "cta"
+ ],
+ "reel-sketch/covers": [
+  "made",
+  "playlist",
+  "cta"
+ ],
+ "reel-sketch/roller": [
+  "made",
+  "playlist",
+  "moods",
+  "cta"
+ ],
+ "reel-sketch/poster": [
+  "made",
+  "moods",
+  "poster",
+  "cta"
+ ],
+ "reel-sketch/back-to-the-mark": [
+  "name",
+  "made",
+  "line",
+  "cta"
+ ],
+ "film-verbs/verbs": [
+  "verbs"
+ ],
+ "film-verbs/line": [
+  "glyph",
+  "line"
+ ],
+ "film-verbs/meet": [
+  "name"
+ ],
+ "film-verbs/pen": [
+  "tool",
+  "how"
+ ]
+}

@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="en">
+<head>
+<script src="/engine-bridge.js"></script>
+<script>
+/* @engine:params */
+const params = {
+  "colour05040f": "#05040f"
+};
+/* @engine:end */
+const UNITS = {"colour05040f":""};
+const applyParams = () => { for (const [k, v] of Object.entries(params)) document.documentElement.style.setProperty("--ae-" + k, v + (UNITS[k] || "")); };
+applyParams();
+window.engine?.onParams((v) => { Object.assign(params, v); applyParams(); });
+</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Treadmill Runner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@500&display=block" rel="stylesheet">
+<style>
+  html, body { margin: 0; height: 100%; background: var(--ae-colour05040f); }
+  body { display: grid; place-items: center; overflow: hidden; }
+  #stage { position: relative; aspect-ratio: 622 / 544; width: min(100vw, calc(100vh * 622 / 544)); }
+  #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  /* compare with the source: ?ref=0291&op=0.5 (frame from ref/), ?t=<loop seconds> freezes */
+  #ref { position: absolute; inset: 0; pointer-events: none; overflow: hidden; display: none; }
+  #ref img { position: absolute; top: 0; height: 100%; left: calc(-5 / 622 * 100%); width: calc(628 / 622 * 100%); }
+</style>
+</head>
+<body>
+<div id="stage"><div id="ref"><img alt=""></div></div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+/* ------------------------------------------------------------------ *
+ *  Measured from the finished render in pin.mp4
+ *  - source runs at 25 fps; one stride = 10 frames = 0.40 s (poses traced below)
+ *  - code line pops every 2.0 s, holds 0.25 s, fades 1.1 s  ->  2.0 s seamless loop (5 strides)
+ * ------------------------------------------------------------------ */
+const LOOP = 2.0, RUN = 0.4, PH0 = 0.7; // stride phase when the code line pops (pose 7 = source frame 285)
+const SPARKS = [[0.36, 432, 200], [0.74, 505, 328], [1.35, 112, 312], [1.87, 432, 200]]; // [loop s, screen x, y]
+
+// 10 traced poses (source-video px). torso: centroid x, y, roll deg. limbs: 3 joints after the root,
+// silhouette-fitted to the video's limb masks (soft IoU 0.15 -> 0.32, segment lengths held to the hand trace).
+const POSE = {
+  torso: [[258.0, 226.6, 20.8], [259.3, 214.1, 17.9], [259.6, 205.8, 16.3], [261.8, 209.8, 15.2], [260.7, 216.2, 19.1],
+          [256.6, 226.8, 19.8], [258.3, 225.0, 22.0], [255.5, 207.0, 21.0], [256.4, 206.1, 20.7], [258.7, 217.4, 24.1]],
+  legA:  [[256.5, 305.2, 224.8, 316, 224.5, 321.5], [296, 309, 317, 325, 323, 327], [293, 286.8, 332, 301, 335.5, 294], [293, 291, 329, 303.5, 334, 297], [269, 305, 296, 326, 303, 332],
+          [255, 332.8, 244.8, 356, 258.5, 357.2], [235, 321, 216.2, 357, 205, 350], [226.5, 295, 182, 295.8, 170.8, 300.5], [233.8, 298, 191, 291, 181.5, 291.5], [243, 306, 215, 295, 204.5, 285]],
+  legB:  [[253.5, 313.5, 261.5, 351, 272, 358], [210.2, 314, 194, 329, 196.5, 338.5], [216.2, 291, 183.5, 299, 181, 306.2], [221.5, 291, 196, 287, 182.8, 289.5], [248.2, 297.5, 220, 296, 222.5, 300.5],
+          [277.5, 291.8, 275.8, 319.5, 275.5, 325.2], [319.5, 282, 346.8, 294, 355.8, 292.5], [328, 285, 356, 305, 365, 299.5], [317, 280, 356, 314, 350, 308], [292.2, 291.5, 291.8, 342, 298, 353]],
+  armB:  [[194, 248, 193, 262, 195, 276], [170.2, 221, 148, 245, 144.5, 259.5], [178, 198.2, 155, 208, 144.5, 229.8], [174.5, 195.5, 153, 211, 151, 224.5], [167.8, 211, 150, 227, 148.8, 242.5],
+          [168.5, 232, 153.5, 242.8, 144.5, 265.2], [179, 245, 162, 264, 156.5, 289], [207, 245, 203, 258, 204, 268], [206, 245, 203, 258, 213, 270], [201, 246.5, 208, 262, 209, 278]],
+  armF:  [[297, 289.5, 312, 302, 317, 305], [330, 239.5, 340, 260, 343, 271], [347.8, 233.5, 346, 251, 334.2, 257.8], [334, 233, 338, 245, 320.5, 252], [342.5, 240.5, 333, 261, 312.5, 258],
+          [304, 256.8, 319, 273, 326.8, 277], [306, 250, 306, 263, 311, 278.5], [293.8, 275.5, 299, 266, 283, 252], [288, 259, 308, 281.2, 319.2, 281], [287.2, 267.5, 291.5, 279, 298.8, 286]],
+};
+
+// secondary motion, patch-tracked on the same stride (source px, +y = down, frame 278 = 0)
+const SHAKE = {
+  // treadmill: per-pose fit of 18 tracked patches, dy = c0 + c1*(x-316)/100 + c2*(y-390)/100 (rms < 0.6 px)
+  //   c0 = dip at the centre, c1 = tilt (left end dips more), c2 = squash (top compresses more than the feet)
+  tm: [[2.20, -0.55, -0.97], [0.45, -0.16, -0.28], [-0.02, 0.02, -0.19], [0.02, 0.05, -0.31], [0.48, 0.30, -0.80],
+       [2.13, -0.12, -1.53], [2.57, -0.39, -1.37], [0.03, -0.11, -0.24], [0.06, -0.26, -0.24], [0.74, -0.68, -0.41]],
+  // headband jiggle relative to the head: extra tilt (deg) and slide along the head (m)
+  band: [[-0.6, 0.0075], [-1.7, 0.0035], [-1.2, -0.0055], [0.4, 0.0045], [-1.7, -0.0075], [-0.9, 0.0065], [-0.3, 0.0135], [3.4, 0.0015], [3.3, -0.0195], [-1.1, -0.0045]],
+  armDx: [-8.7, -3.1, 0.0, 1.9, -0.2, -8.0, -6.8, -0.5, 1.0, 0.6], // console lean, residual-corrected against the render
+  bottle: [[-4.2, 5.6], [-4.8, 2.1], [0, 0], [5.1, -0.2], [4.4, 2.6], [-2.8, 6.1], [-5.1, 5.9], [-0.3, -0.1], [3.9, -0.9], [3.6, -0.3]],
+};
+
+/* ---------- camera model: everything is placed in source-video pixels ---------- */
+const W = 622, H = 544, PR = 2;
+const FOV = 35, CAM_Y = 0.635, CAM_Z = 4.66;
+const F = (H / 2) / Math.tan(THREE.MathUtils.degToRad(FOV / 2));
+const P = (sx, sy, z = 0) => { const D = CAM_Z - z; return new THREE.Vector3((sx - 316) * D / F, CAM_Y - (sy - 283) * D / F, z); };
+const S = (px, z = 0) => px * (CAM_Z - z) / F;
+const floorPt = (sx, sy, y = 0) => { const D = F * (CAM_Y - y) / (sy - 283); return new THREE.Vector3((sx - 316) * D / F, y, CAM_Z - D); };
+
+const qs = new URLSearchParams(location.search);
+const stageEl = document.getElementById('stage');
+
+/* ---------- renderer ---------- */
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(PR);
+renderer.setSize(W, H, false);
+renderer.toneMapping = THREE.NoToneMapping;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+stageEl.prepend(renderer.domElement);
+
+const camera = new THREE.PerspectiveCamera(FOV, W / H, 0.05, 5000);
+camera.position.set(0, CAM_Y, CAM_Z);
+camera.lookAt(0, CAM_Y, 0);
+camera.setViewOffset(W, H, 0, -11, W, H); // horizon at source row 283
+
+const scene = new THREE.Scene();
+const col = (h) => new THREE.Color(h);
+const std = (o) => new THREE.MeshStandardMaterial(o);
+let PARENT = scene;
+function part(geo, mat, parent = PARENT) { const m = new THREE.Mesh(geo, mat); parent.add(m); return m; }
+// pivot rig: children are authored in world space; the outer group rotates/translates about `at`
+function rig(at, parent = scene) { const o = new THREE.Group(), i = new THREE.Group(); o.position.copy(at); i.position.copy(at).negate(); o.add(i); parent.add(o); o.userData.rest = at.clone(); return [o, i]; }
+function canvasTex(w, h, draw, srgb = true) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
+
+/* ---------- purple studio environment + lights ---------- */
+{
+  const env = new THREE.Scene();
+  env.add(new THREE.Mesh(new THREE.SphereGeometry(50, 32, 16), new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    vertexShader: `varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }`,
+    fragmentShader: `varying vec3 vP; void main(){ float y = normalize(vP).y;
+      vec3 c = mix(vec3(.02,.015,.06), vec3(.24,.2,.6), exp(-abs(y) * 6.));
+      c = mix(c, vec3(.004,.004,.012), step(y, -0.02) * .85); gl_FragColor = vec4(c, 1.); }`,
+  })));
+  const box = (w, h, c, p) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide })); m.position.copy(p); m.lookAt(0, 0, 0); env.add(m); };
+  box(30, 8, new THREE.Color(0.9, 0.8, 2.4), new THREE.Vector3(0, 22, -20)); // lavender top/back softbox
+  box(12, 12, new THREE.Color(0.35, 0.35, 1.0), new THREE.Vector3(-25, 10, 15));
+  box(10, 10, new THREE.Color(0.4, 0.3, 1.1), new THREE.Vector3(25, 6, 5));
+  const pm = new THREE.PMREMGenerator(renderer);
+  scene.environment = pm.fromScene(env, 0.03).texture;
+  scene.environmentIntensity = 1.0;
+}
+const hemi = new THREE.HemisphereLight(0x6e6a96, 0x08080e, 0.6); scene.add(hemi);
+const rim = new THREE.DirectionalLight(0xb4acff, 1.6); rim.position.set(0.5, 3, -4); scene.add(rim);
+const fill = new THREE.DirectionalLight(0x8a88b8, 0.75); fill.position.set(-3, 1.2, 4); scene.add(fill);
+// key = the big top softbox: soft shadows under the runner, the props and on the belt
+const keyLight = new THREE.DirectionalLight(0xe4e0ff, 0.45); keyLight.position.set(-0.6, 5, 1.6); scene.add(keyLight);
+keyLight.castShadow = true; keyLight.shadow.mapSize.set(2048, 2048); keyLight.shadow.radius = 6; keyLight.shadow.bias = -0.0006; keyLight.shadow.normalBias = 0.01;
+Object.assign(keyLight.shadow.camera, { left: -2.6, right: 2.8, top: 2.4, bottom: -2.4, near: 1, far: 12 });
+
+
+/* ---------- sky with code ---------- */
+const skyTex = canvasTex(W * PR, H * PR, (g, w, h) => {
+  const k = w / W;
+  // vertical profile measured at x=470, centre-normalised
+  const stops = [[0, '#020017'], [30, '#01011d'], [60, '#020220'], [90, '#050428'], [140, '#0c0b38'],
+    [160, '#100f43'], [180, '#171450'], [220, '#241f6c'], [260, '#383290'], [275, '#443a9f'], [283, '#4a3fa8'], [300, '#5446b2'], [544, '#5446b2']];
+  const gr = g.createLinearGradient(0, 0, 0, h);
+  stops.forEach(([y, c]) => gr.addColorStop(y / H, c));
+  g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  // horizontal falloff (edges ~20% darker)
+  const hx = g.createLinearGradient(0, 0, w, 0);
+  hx.addColorStop(0, '#c9c9c9'); hx.addColorStop(290 / W, '#ffffff'); hx.addColorStop(1, '#c4c4c4');
+  g.globalCompositeOperation = 'multiply'; g.fillStyle = hx; g.fillRect(0, 0, w, h);
+  g.globalCompositeOperation = 'source-over';
+});
+const codeFont = (px) => `500 ${px}px "Fira Code", ui-monospace, Menlo, Consolas, monospace`;
+function drawCode(g, k, lines, x, y0, lh, size) {
+  g.font = codeFont(size * k); g.textBaseline = 'alphabetic';
+  g.fillStyle = '#7e7abc'; g.shadowColor = 'rgba(140,130,240,.45)'; g.shadowBlur = 4 * k;
+  lines.forEach((s, i) => g.fillText(s, x * k, (y0 + i * lh) * k));
+}
+let codeTopTex;
+function buildCodeTextures() {
+  const g = skyTex.image.getContext('2d'), k = PR;
+  drawCode(g, k, ['var now = LocalTime.now();', 'if (now.isAfter(LocalTime.of(6, 0))) {', '    attitude = "still running";', '}', 'run();'], 487, 196, 13.6, 12.2);
+  skyTex.needsUpdate = true;
+  codeTopTex = canvasTex(W * PR, H * PR, (g2) => {
+    g2.save(); g2.translate(-2 * k, 125 * k); g2.rotate(0.006);
+    drawCode(g2, k, ['try { runWithoutBugs(); } catch (NiceTryException e) { } finally { run(); }'], 0, 0, 0, 11.6);
+    g2.restore();
+  });
+  bg.material.uniforms.tTop.value = codeTopTex;
+}
+const bg = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+  uniforms: { tSky: { value: skyTex }, tTop: { value: null }, uTop: { value: 0 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 1., 1.); }`,
+  fragmentShader: `uniform sampler2D tSky, tTop; uniform float uTop; varying vec2 vUv;
+    void main(){ vec3 c = texture2D(tSky, vUv).rgb; vec4 t = texture2D(tTop, vUv); c += t.rgb * t.a * uTop; gl_FragColor = vec4(c, 1.); }`,
+  depthTest: false, depthWrite: false,
+}));
+bg.frustumCulled = false; bg.renderOrder = -1000; scene.add(bg);
+
+
+/* ---------- glossy floor, neon grid, LED reflection ---------- */
+const floorRender = new THREE.Mesh(new THREE.PlaneGeometry(8000, 8000), new THREE.ShaderMaterial({
+  uniforms: { uHaze: { value: col('#5a50c8') }, uBase: { value: col('#05060f') }, uSp: { value: new THREE.Vector2(0.375, 0.43) }, uOff: { value: new THREE.Vector2(0.1875, 1.583) }, uRes: { value: new THREE.Vector2(W * PR, H * PR) } },
+  vertexShader: `varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position,1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+  fragmentShader: `uniform vec3 uHaze, uBase; uniform vec2 uSp, uOff, uRes; varying vec3 vW;
+    float h1(float n){ return fract(sin(n * 12.9898) * 43758.5453); }
+    vec3 lineCol(float r){ return r < .45 ? vec3(.05,1.,.25) : r < .7 ? vec3(.45,.3,1.) : r < .85 ? vec3(.8,.25,.9) : vec3(.35,.35,.7); }
+    void main(){
+      vec2 p = (vW.xz - uOff) / uSp;
+      vec2 fw = fwidth(p) * 1.8; vec2 d = abs(fract(p - .5) - .5) / fw;
+      vec2 id = floor(p + .5);
+      float lx = pow(1. - min(d.x, 1.), 1.6), lz = pow(1. - min(d.y, 1.), 1.6);
+      float ix = h1(id.x * 3.7 + 1.3), iz = h1(id.y * 5.1 + 7.9);
+      vec3 cx = lineCol(ix) * (.35 + .65 * h1(id.x + 9.1)), cz = lineCol(iz) * (.35 + .65 * h1(id.y + 2.3));
+      float dist = length(vW.xz - vec2(0., ${CAM_Z.toFixed(2)}));
+      float fade = exp(-dist * .12) * smoothstep(0., 1.5, 1. / max(fw.x + fw.y, .001) * .02);
+      vec3 c = uBase + (cx * lx + cz * lz) * fade * .9;
+      // horizon glow peaks at x~350 and falls off faster to the left (fitted at x = 110 / 350 / 580)
+      float hx = gl_FragCoord.x / uRes.x - 345. / ${W}., sg = hx < 0. ? .45 : .42;
+      vec3 haze = uHaze * exp(-(hx / sg) * (hx / sg));
+      c = mix(c, haze, 1. - exp(-max(dist - 6.8, 0.) / 11.)); // fitted to the plate's floor profile
+      gl_FragColor = vec4(c, 1.);
+    }`,
+}));
+floorRender.rotation.x = -Math.PI / 2; scene.add(floorRender);
+const shadowCatcher = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ color: 0x000004, opacity: 0.55, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+shadowCatcher.rotation.x = -Math.PI / 2; shadowCatcher.receiveShadow = true; scene.add(shadowCatcher);
+
+// green LED reflection on the glossy floor, profile measured from the plate: a mirrored copy of the 5 lit cells
+// starting at y 428, peaking at 445 and decaying ~exp(-dy/22 px), over a broad green haze under the bar
+const LED_CELLS = [[142, 168], [176, 203], [209, 237], [244, 273], [280, 308]]; // lit cells, source px
+const floorGlow = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.ShaderMaterial({
+  transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
+  uniforms: { uRes: { value: new THREE.Vector2(W * PR, H * PR) }, uCells: { value: LED_CELLS.map(([a, b]) => new THREE.Vector2(a, b)) } },
+  vertexShader: `void main(){ gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }`,
+  fragmentShader: `uniform vec2 uRes; uniform vec2 uCells[5];
+    void main(){
+      vec2 s = vec2(gl_FragCoord.x / uRes.x * ${W}. + 5., (1. - gl_FragCoord.y / uRes.y) * ${H}.);   // source-video pixels
+      float cell = 0.;
+      for (int i = 0; i < 5; i++) cell = max(cell, smoothstep(uCells[i].x - 1., uCells[i].x + 5., s.x) * (1. - smoothstep(uCells[i].y - 5., uCells[i].y + 1., s.x)));
+      float dy = max(s.y - 445., 0.);
+      float streak = cell * smoothstep(426., 440., s.y) * exp(-dy / 22.);
+      float haze = smoothstep(112., 165., s.x) * (1. - smoothstep(288., 330., s.x)) * smoothstep(404., 418., s.y) * exp(-max(s.y - 430., 0.) / 60.);
+      gl_FragColor = vec4(vec3(0., 1., .18) * (.12 * streak + .026 * haze), 1.);
+    }`,
+}));
+{ // floor quad covering the screen rectangle under the lit cells
+  const q = [[100, 505], [340, 505], [340, 402], [100, 402]].map(([x, y]) => floorPt(x, y, 0));
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(q.flatMap(v => [v.x, v.y, v.z]), 3));
+  g.setIndex([0, 1, 2, 0, 2, 3]);
+  floorGlow.geometry = g;
+  scene.add(floorGlow);
+}
+
+
+/* ---------- treadmill ---------- */
+function stadium(x0, x1, y0, y1) {
+  const r = (y1 - y0) / 2, s = new THREE.Shape();
+  s.moveTo(x0 + r, y0); s.lineTo(x1 - r, y0); s.absarc(x1 - r, y0 + r, r, -Math.PI / 2, Math.PI / 2, false);
+  s.lineTo(x0 + r, y1); s.absarc(x0 + r, y0 + r, r, Math.PI / 2, Math.PI * 1.5, false); return s;
+}
+const TZ = 0.35; // treadmill front face depth
+// running belt: slat texture scrolled backwards (BELT_SPEED m/s)
+// pattern repeat must stay > 2x the per-frame travel or it strobes (2.2 m/s @60 fps = 0.037 m/frame)
+const BELT_LEN = 1.54, SLAT = 0.2, BELT_SPEED = 2.2;
+// belt: plain rubber with faint slat seams + worn streaks (the plate shows an almost uniform surface; the seams are
+// only there so the motion reads). UVs are in metres (see deck below), so repeat = slats per metre.
+const beltTex = canvasTex(128, 32, (g, w, h) => {
+  g.fillStyle = '#42545a'; g.fillRect(0, 0, w, h);
+  g.fillStyle = 'rgba(0,0,0,.10)'; g.fillRect(0, 0, 3, h);
+  g.fillStyle = 'rgba(255,255,255,.035)'; g.fillRect(34, 0, 26, h); g.fillRect(90, 0, 10, h);
+  for (let i = 0; i < 90; i++) { g.fillStyle = `rgba(${Math.random() < .5 ? '0,0,0' : '255,255,255'},.03)`; g.fillRect(Math.random() * w, Math.random() * h, 2, 1); }
+});
+beltTex.wrapS = beltTex.wrapT = THREE.RepeatWrapping; beltTex.repeat.set(1 / SLAT, 1 / SLAT);
+const beltGlow = canvasTex(256, 4, (g, w, h) => {   // u = deck x in [-0.8, 0.74]; lit cells sit under x < ~0
+  const gr = g.createLinearGradient(0, 0, w, 0); gr.addColorStop(0, '#153e22'); gr.addColorStop(0.45, '#0e3018'); gr.addColorStop(0.72, '#000000'); gr.addColorStop(1, '#000000');
+  g.fillStyle = gr; g.fillRect(0, 0, w, h);
+});
+beltGlow.repeat.set(1 / 1.54, 1); beltGlow.offset.set(0.8 / 1.54, 0);
+const beltL = std({ color: '#ffffff', map: beltTex, roughness: 0.85, metalness: 0.05, envMapIntensity: 0.2, emissive: '#ffffff', emissiveMap: beltGlow });
+// treadmill rig pivots at the fit's reference point; the console rig pivots at the upright's foot
+let frontRim;
+const [tmRig, tmInner] = rig(P(316, 390, TZ));             // the fit's reference point
+const [conRig, conInner] = rig(P(452, 360, 0.05), tmInner); // console pivots at the upright's foot
+PARENT = tmInner;
+// rounded rectangle in the XY plane
+function roundRect(x0, y0, x1, y1, r) {
+  const s = new THREE.Shape(); s.moveTo(x0 + r, y0); s.lineTo(x1 - r, y0); s.quadraticCurveTo(x1, y0, x1, y0 + r); s.lineTo(x1, y1 - r);
+  s.quadraticCurveTo(x1, y1, x1 - r, y1); s.lineTo(x0 + r, y1); s.quadraticCurveTo(x0, y1, x0, y1 - r); s.lineTo(x0, y0 + r); s.quadraticCurveTo(x0, y0, x0 + r, y0); return s;
+}
+// a flat strip between four screen-space points on a depth plane (used for the painted-on console details)
+function quad(pts, z, mat, parent = PARENT) {
+  const sh = new THREE.Shape(pts.map(([x, y]) => { const v = P(x, y, z); return new THREE.Vector2(v.x, v.y); }));
+  const m = part(new THREE.ShapeGeometry(sh), mat, parent); m.position.z = z; return m;
+}
+{
+  // powder-coat greys sampled from the plate: rim top #323746 / underside #141c20, deck #415e68, board #4b475a
+  const bodyL = std({ color: '#101116', roughness: 0.6, metalness: 0.2, envMapIntensity: 0.3 });
+  const ringL = std({ color: '#7c7e86', emissive: '#14161a', roughness: 0.42, metalness: 0.1, envMapIntensity: 0.14 });
+  const deckL = std({ color: '#8a9aa0', emissive: '#1e2628', roughness: 0.6, metalness: 0.1, envMapIntensity: 0.15 });
+  const postL = std({ color: '#9a94a0', emissive: '#2a2a30', roughness: 0.55, metalness: 0.15, envMapIntensity: 0.25 });
+  const body = part(new THREE.ExtrudeGeometry(stadium(-0.9, 0.9, 0.0, 0.232), { depth: 0.62, bevelEnabled: false, curveSegments: 24 }), bodyL);
+  body.position.z = -0.31;
+  // frame rim: round tube along the stadium outline, front + back
+  const rimPts = stadium(-0.906, 0.906, 0.016, 0.226).getSpacedPoints(240).slice(0, -1).map(v => new THREE.Vector3(v.x, v.y, 0));
+  const rimGeo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(rimPts, true), 480, 0.019, 16, true);
+  frontRim = part(rimGeo, ringL); frontRim.position.z = TZ - 0.02; frontRim.userData.noShadow = true;
+  part(rimGeo, ringL).position.z = -TZ + 0.02;
+  // black glass panel with a thin dark-grey lip just inside the rim
+  const panel = part(new THREE.ShapeGeometry(stadium(-0.888, 0.888, 0.03, 0.212), 24), std({ color: '#000000', roughness: 1, metalness: 0, envMapIntensity: 0 }));
+  panel.position.z = TZ - 0.03;
+  const lipPts = stadium(-0.884, 0.884, 0.034, 0.208).getSpacedPoints(200).slice(0, -1).map(v => new THREE.Vector3(v.x, v.y, 0));
+  part(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(lipPts, true), 400, 0.004, 6, true), std({ color: '#23262e', roughness: 0.4, metalness: 0.3 })).position.z = TZ - 0.028;
+  // deck: rounded-corner slab (plan view), belt on its top cap with metre UVs so the texture can scroll
+  const DX0 = -0.80, DX1 = 0.74, DZ = 0.305, DY = 0.226, DT = 0.03;
+  const deckGeo = new THREE.ExtrudeGeometry(roundRect(DX0, -DZ, DX1, DZ, 0.06), { depth: DT, bevelEnabled: true, bevelThickness: 0.006, bevelSize: 0.006, bevelSegments: 3, curveSegments: 12 });
+  deckGeo.rotateX(-Math.PI / 2); deckGeo.translate(0, DY, 0);
+  part(deckGeo, [beltL, deckL]);
+  // end rollers peeking out under the deck ends
+  for (const x of [DX0 + 0.05, DX1 - 0.05]) {
+    const roller = part(new THREE.CylinderGeometry(0.018, 0.018, 2 * DZ - 0.02, 20), std({ color: '#2a2e36', roughness: 0.4, metalness: 0.5 }));
+    roller.rotation.x = Math.PI / 2; roller.position.set(x, DY + 0.012, 0);
+  }
+
+  const bar = (p, q, w, d, mat, z) => {
+    const A = P(p[0], p[1], z), B = P(q[0], q[1], z), m = part(new THREE.BoxGeometry(A.distanceTo(B), w, d), mat);
+    m.position.copy(A).lerp(B, 0.5); m.rotation.z = Math.atan2(B.y - A.y, B.x - A.x); return m;
+  };
+  PARENT = conInner;
+  // console main board (front face, traced): arm 349..414 at y 252-266, groove edge (399,268)->(453,360),
+  // bright right edge (424,263)->(471,360)
+  const CZ = 0.1, DEPTH = 0.3;
+  const q = (x, y) => { const v = P(x, y - 3, CZ + 0.012); return new THREE.Vector2(v.x, v.y); }; // -3 px: bevel grows the outline
+  const prof = new THREE.Shape();
+  prof.moveTo(...q(349, 265).toArray()); prof.quadraticCurveTo(...q(343, 260).toArray(), ...q(349, 255).toArray());
+  prof.lineTo(...q(410, 252).toArray());                                                     // arm top
+  prof.lineTo(...q(451, 231).toArray()); prof.quadraticCurveTo(...q(458, 229).toArray(), ...q(457, 236).toArray()); // holder top + rounded tip
+  prof.lineTo(...q(436, 250).toArray());                                                     // holder underside
+  prof.quadraticCurveTo(...q(425, 256).toArray(), ...q(426, 266).toArray());                 // fillet into the board's right edge
+  prof.lineTo(...q(471, 360).toArray()); prof.lineTo(...q(453, 360).toArray()); prof.lineTo(...q(400, 268).toArray());
+  prof.quadraticCurveTo(...q(396, 265).toArray(), ...q(388, 265).toArray()); prof.closePath();
+  const con = part(new THREE.ExtrudeGeometry(prof, { depth: DEPTH, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.008, bevelSegments: 3, curveSegments: 10 }), postL);
+  con.position.z = CZ - DEPTH;
+  // the board's narrower inner panel left of the groove (plate #494661, a shade darker than the face)
+  const sideL = std({ color: '#8a8698', emissive: '#22222c', roughness: 0.55, metalness: 0.15, envMapIntensity: 0.25 });
+  quad([[380, 268], [400, 268], [453, 360], [441, 360]], CZ + 0.006, sideL);
+  // dark recess where the arm meets the board (plate #0d1021)
+  quad([[382, 259], [398, 259], [404, 276], [389, 276]], CZ + 0.008, std({ color: '#06070f', roughness: 0.9 }));
+  // groove between side and face, and the bright rim-lit right edge (#6d64a2)
+  bar([453, 360], [399, 268], 0.005, 0.004, std({ color: '#4a4458', roughness: 0.6 }), CZ + 0.014);
+  bar([471, 360], [427, 268], 0.006, 0.004, std({ color: '#8f86d0', emissive: '#6a62b0', roughness: 0.3 }), CZ + 0.014);
+  bar([427, 268], [398, 267], 0.004, 0.004, std({ color: '#2a2638', roughness: 0.7 }), CZ + 0.014);          // horizontal panel joint under the arm
+  // arm top edge highlight and a shadowed underside lip
+  bar([349, 254], [412, 251], 0.004, 0.004, std({ color: '#8a8698', emissive: '#2a2a36', roughness: 0.4 }), CZ + 0.014);
+  bar([352, 265], [386, 265], 0.004, 0.004, std({ color: '#3a3648', roughness: 0.7 }), CZ + 0.014);
+}
+// screen: glowing band on the holder's face (plate core #b4cebc, green edges), with a light bezel tip
+const screenTex = canvasTex(256, 32, (g, w, h) => {
+  const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#3fae7c'); gr.addColorStop(0.5, '#d2eadc'); gr.addColorStop(1, '#4cbc88');
+  g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  const gx = g.createLinearGradient(0, 0, w, 0); gx.addColorStop(0, 'rgba(0,0,0,.35)'); gx.addColorStop(0.15, 'rgba(0,0,0,0)'); gx.addColorStop(0.9, 'rgba(0,0,0,0)'); gx.addColorStop(1, 'rgba(0,0,0,.3)');
+  g.fillStyle = gx; g.fillRect(0, 0, w, h);
+});
+{
+  const z = 0.1 + 0.02, pts = [[413, 251], [448, 233], [452, 240], [418, 257]].map(([x, y]) => { const v = P(x, y, z); return new THREE.Vector2(v.x, v.y); });
+  const geo = new THREE.ShapeGeometry(new THREE.Shape(pts));
+  const UVS = [[0, 1], [1, 1], [1, 0], [0, 0]], pos = geo.attributes.position, uv = geo.attributes.uv;   // corner uv by nearest traced point (winding-safe)
+  for (let i = 0; i < pos.count; i++) { let best = 0, bd = 1e9; pts.forEach((p, k) => { const d = (p.x - pos.getX(i)) ** 2 + (p.y - pos.getY(i)) ** 2; if (d < bd) { bd = d; best = k; } }); uv.setXY(i, ...UVS[best]); }
+  const scr = part(geo, new THREE.MeshBasicMaterial({ map: screenTex, color: '#d4dcd8' })); scr.position.z = z;
+  const tip = part(new THREE.SphereGeometry(0.018, 16, 12), std({ color: '#d8dcec', emissive: '#6c7090', roughness: 0.35 }));
+  tip.position.copy(P(454, 234, 0.11));
+}
+PARENT = tmInner;
+// bottle (plate: lavender-white #a59fd5 body, 20 px tall at x 403-419): own rig at its base, driven by its tracked
+// position (it lags the console, then overshoots)
+const [bottleRig] = rig(P(410, 249, 0.02));
+{
+  PARENT = bottleRig;
+  const bottleM = new THREE.MeshPhysicalMaterial({ color: '#e8e2f6', roughness: 0.4, emissive: '#5a5290', clearcoat: 0.5, clearcoatRoughness: 0.25 });
+  const body = part(new THREE.LatheGeometry([[0, 0], [0.044, 0], [0.046, 0.006], [0.046, 0.094], [0.041, 0.104], [0.028, 0.11], [0, 0.11]].map(([x, y]) => new THREE.Vector2(x, y)), 40), bottleM);
+  const cap = part(new THREE.CylinderGeometry(0.024, 0.028, 0.018, 24), std({ color: '#4e4b88', roughness: 0.4 }));
+  cap.position.y = 0.119;
+  const nz = part(new THREE.CylinderGeometry(0.007, 0.01, 0.022, 12), std({ color: '#3c3a70', roughness: 0.4 }));
+  nz.position.y = 0.139;
+  PARENT = tmInner;
+}
+
+/* ---------- LED progress bar: 5 lit cells at their measured positions ---------- */
+const ledOnTex = canvasTex(256, 128, (g, w, h) => {
+  // measured: stripes G~220 with thin separators G~182, cell average #64ce7c
+  g.fillStyle = '#00b830'; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 9; i++) {
+    const x = (i + 0.5) * w / 9, gr = g.createLinearGradient(x - 12, 0, x + 12, 0);
+    gr.addColorStop(0, 'rgba(150,232,168,0)'); gr.addColorStop(0.2, '#96e8a8'); gr.addColorStop(0.8, '#96e8a8'); gr.addColorStop(1, 'rgba(150,232,168,0)');
+    g.fillStyle = gr; g.fillRect(x - 12, 8, 24, h - 16);
+  }
+});
+const ledLit = std({ color: '#000', emissive: '#ffffff', emissiveMap: ledOnTex, emissiveIntensity: 0.9 }); // stays under the bloom threshold like the plate
+LED_CELLS.forEach(([x0, x1], i) => {
+  const a = P(x0, 371, TZ - 0.02), b = P(x1, 398, TZ - 0.02), w = b.x - a.x, h = a.y - b.y, s = new THREE.Shape();
+  const r = i === 0 ? h / 2 : 0.012;                               // first cell follows the rounded end
+  s.moveTo(r, 0); s.lineTo(w - 0.012, 0); s.quadraticCurveTo(w, 0, w, 0.012); s.lineTo(w, h - 0.012); s.quadraticCurveTo(w, h, w - 0.012, h);
+  if (i === 0) { s.lineTo(r, h); s.absarc(r, r, r, Math.PI / 2, Math.PI * 1.5, false); }
+  else { s.lineTo(r, h); s.quadraticCurveTo(0, h, 0, h - r); s.lineTo(0, r); s.quadraticCurveTo(0, 0, r, 0); }
+  const geo = new THREE.ShapeGeometry(s, 12); geo.translate(-w / 2, -h / 2, 0);
+  const uv = geo.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setXY(k, uv.getX(k) / w, uv.getY(k) / h); // shape UVs are pre-translate
+  part(geo, ledLit).position.set((a.x + b.x) / 2, (a.y + b.y) / 2, TZ - 0.02);
+});
+// green spill on the black glass around the lit cells (gaps read #01730c in the plate)
+{
+  const a = P(134, 367, TZ - 0.025), b = P(322, 403, TZ - 0.025);                 // inside the rim only
+  const tex = canvasTex(512, 128, (g, w, h) => {
+    g.filter = 'blur(8px)'; g.fillStyle = 'rgba(0,255,40,1)';
+    LED_CELLS.forEach(([x0, x1]) => g.fillRect((x0 - 134) / 188 * w, 0.1 * h, (x1 - x0) / 188 * w, 0.8 * h));
+  });
+  const glow = part(new THREE.PlaneGeometry(b.x - a.x, a.y - b.y), new THREE.MeshBasicMaterial({ map: tex, color: '#12b428', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+  glow.position.set((a.x + b.x) / 2, (a.y + b.y) / 2, TZ - 0.024);
+}
+
+// the lit cells spill green onto the rim around them (the plate reads #26533e above the cells, #075d1c below):
+// an emissive strip painted along the front rim tube, lit where the rim passes the lit cells
+{
+  const pts = stadium(-0.906, 0.906, 0.016, 0.226).getSpacedPoints(240).slice(0, -1);
+  const tex = canvasTex(pts.length, 4, (g, w) => pts.forEach((p, i) => {
+    const sx = 316 + p.x * F / (CAM_Z - TZ), k = THREE.MathUtils.smoothstep(sx, 120, 150) * (1 - THREE.MathUtils.smoothstep(sx, 300, 336));
+    g.fillStyle = `rgb(${Math.round(24 * (1 - k))},${Math.round(26 + 229 * k)},${Math.round(32 + 28 * k)})`; g.fillRect(i, 0, 1, 4); // base glow + LED green
+  }));
+  tex.wrapS = THREE.RepeatWrapping;
+  frontRim.material = std({ color: '#7c7e86', roughness: 0.42, metalness: 0.1, envMapIntensity: 0.14, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.13 });
+}
+
+PARENT = scene;
+
+/* ---------- props ---------- */
+const purple = (c, r = 0.45, m = 0.1) => std({ color: c, roughness: r, metalness: m });
+{
+  // exercise ball
+  const seams = canvasTex(64, 512, (g, w, h) => { g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.fillStyle = '#c8c6de'; for (let i = 1; i < 18; i++) g.fillRect(0, i * h / 18 - 1, w, 2); });
+  const ballZ = -0.6, ballR = S(64, ballZ);
+  const ball = part(new THREE.SphereGeometry(ballR, 64, 48), new THREE.MeshPhysicalMaterial({ color: '#767ba9', map: seams, roughness: 0.6, sheen: 0.5, sheenColor: '#9a94d8', sheenRoughness: 0.6 }));
+  ball.rotation.x = 0.35;
+  ball.position.copy(P(58, 318, ballZ)); ball.position.y = ballR;
+
+  // weight plates (traced): front one flat on the floor, back one resting tilted, almost edge-on to camera
+  const plate = (pos, rot, r) => {
+    const g = new THREE.Group(); g.position.copy(pos); g.rotation.set(...rot); scene.add(g);
+    const plateL = std({ color: '#4a4c88', roughness: 0.55, metalness: 0.1, envMapIntensity: 0.25 });
+    const disc = new THREE.LatheGeometry([[0, -0.035], [r - 0.014, -0.035], [r, -0.021], [r, 0.021], [r - 0.014, 0.035], [r * 0.8, 0.035], [r * 0.76, 0.026], [r * 0.3, 0.026], [r * 0.28, 0.035], [0, 0.035]].map(([x, y]) => new THREE.Vector2(x, y)), 96);
+    part(disc, plateL, g);
+    const lip = part(new THREE.TorusGeometry(r * 0.78, 0.007, 8, 96), std({ color: '#5a5aa8', roughness: 0.35, metalness: 0.4 }), g);
+    lip.rotation.x = Math.PI / 2; lip.position.y = 0.028;
+    const hub = part(new THREE.CylinderGeometry(r * 0.2, r * 0.22, 0.085, 40), std({ color: '#f4f4fa', emissive: '#5a5a6c', roughness: 0.12, metalness: 1 }), g);
+    hub.position.y = 0.002;
+    part(new THREE.TorusGeometry(r * 0.15, 0.006, 8, 40), std({ color: '#ffffff', roughness: 0.05, metalness: 1 }), g).rotation.x = Math.PI / 2;
+    part(new THREE.CylinderGeometry(r * 0.08, r * 0.08, 0.08, 20), std({ color: '#101018', roughness: 0.6 }), g).position.y = 0.004; // bore
+  };
+  { const c = floorPt(92, 438, 0.07); c.y = 0.035; plate(c, [0, 0, 0], 0.24); }
+  { const c = floorPt(39, 413, 0.1); plate(c, [-0.05, 0, 0.12], 86 * (CAM_Z - c.z) / F); }
+
+  // kettlebell (traced: body r 23 px at (536,404), handle 60 px wide reaching y 352)
+  const kb = new THREE.Group(); kb.position.copy(floorPt(536, 427)); scene.add(kb);
+  const kbL = new THREE.MeshPhysicalMaterial({ color: '#8e81bc', roughness: 0.42, metalness: 0.05, clearcoat: 0.4, clearcoatRoughness: 0.3 });
+  const kbody = part(new THREE.SphereGeometry(0.106, 40, 28), kbL, kb);
+  kbody.scale.set(1, 0.96, 1); kbody.position.y = 0.102;
+  const kh = part(new THREE.TorusGeometry(0.094, 0.022, 14, 48, Math.PI), kbL, kb); kh.position.y = 0.212;
+  for (const sx of [-1, 1]) {                                                                         // handle legs into the body
+    const a = new THREE.Vector3(sx * 0.094, 0.212, 0), b = new THREE.Vector3(sx * 0.082, 0.16, 0);
+    const leg = part(new THREE.CylinderGeometry(0.021, 0.024, a.distanceTo(b), 14), kbL, kb);
+    leg.position.copy(a).lerp(b, 0.5); leg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), a.clone().sub(b).normalize());
+    part(new THREE.SphereGeometry(0.022, 14, 10), kbL, kb).position.copy(a);
+  }
+
+  // jump rope (lies on the floor)
+  const pts = [[338, 439], [370, 438], [420, 433], [470, 427], [510, 421], [540, 420], [575, 424], [585, 432], [570, 440], [530, 442], [470, 446], [420, 452], [370, 465], [336, 485], [345, 500], [375, 508], [392, 512]]
+    .map(([x, y]) => floorPt(x, y, 0.014));
+  const rope = new THREE.CatmullRomCurve3(pts, false, 'centripetal');
+  // 3-strand twisted rope: each strand drawn as a shaded ridge (dark groove -> lit crown -> dark groove)
+  const braid = canvasTex(64, 64, (g, w, h) => {
+    g.fillStyle = '#26243e'; g.fillRect(0, 0, w, h);
+    for (let i = -3; i < 4; i++) for (const [lw, c] of [[19, '#5c5a82'], [12, '#8e8cb4'], [5, '#c4c2e2']]) {
+      g.strokeStyle = c; g.lineWidth = lw; g.beginPath(); g.moveTo(i * 21.3 - 4, -4); g.lineTo(i * 21.3 + 64 + 4, h + 4); g.stroke();
+    }
+  });
+  braid.wrapS = braid.wrapT = THREE.RepeatWrapping; braid.repeat.set(55, 1);
+  part(new THREE.TubeGeometry(rope, 400, 0.0155, 12, false), std({ color: '#ffffff', map: braid, roughness: 0.75 }));
+  const handle = (p, dir) => {
+    const g = new THREE.Group(); g.position.copy(p); g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir); scene.add(g);
+    const hb = part(new THREE.CylinderGeometry(0.017, 0.017, 0.2, 16), std({ color: '#0d0d14', roughness: 0.3, metalness: 0.4 }), g);
+    hb.position.y = 0.1;
+    for (const y of [0.0, 0.2]) {
+      const c = part(new THREE.CylinderGeometry(0.019, 0.019, 0.012, 16), std({ color: '#e8e4ff', roughness: 0.4 }), g);
+      c.position.y = y;
+    }
+  };
+  handle(pts[0], pts[0].clone().sub(pts[1]).normalize());
+  handle(pts[pts.length - 1], pts[pts.length - 1].clone().sub(pts[pts.length - 2]).normalize());
+
+  // rolled mat behind the kettlebell (traced: 32 px thick, left end x 495, spiral end at (612,383) turned toward us)
+  const spiral = canvasTex(256, 256, (g, w, h) => { g.fillStyle = '#3a3470'; g.fillRect(0, 0, w, h); g.strokeStyle = '#7a74b8'; g.lineWidth = 6; g.beginPath();
+    for (let a = 0; a < Math.PI * 10; a += 0.04) { const r = 6 + a * 3.9; g.lineTo(w / 2 + Math.cos(a) * r, h / 2 + Math.sin(a) * r); } g.stroke(); });
+  const matL = std({ color: '#7f7ca8', roughness: 0.7 }), MAT_R = 0.088, MAT_L = 0.7, yaw = THREE.MathUtils.degToRad(40);
+  const n = new THREE.Vector3(Math.cos(yaw), 0, Math.sin(yaw)), cap = new THREE.Vector3(1.62, MAT_R, -0.06);
+  const mat = part(new THREE.CylinderGeometry(MAT_R, MAT_R, MAT_L, 48), [matL, std({ color: '#fff', map: spiral, roughness: 0.7 }), matL]);
+  mat.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), n); mat.position.copy(cap).addScaledVector(n, -MAT_L / 2);
+}
+
+
+/* ---------- character ---------- */
+const hero = new THREE.Group(); scene.add(hero);
+const torso = new THREE.Group(); hero.add(torso);
+const HERO_YAW = 0.15;
+
+// rounded-triangle centreline
+const TRI = [new THREE.Vector2(0, 0.438), new THREE.Vector2(-0.3795, -0.219), new THREE.Vector2(0.3795, -0.219)];
+function roundTri(pts, r) {
+  const s = new THREE.Shape(), n = pts.length;
+  for (let i = 0; i < n; i++) {
+    const p = pts[i], a = pts[(i + n - 1) % n], b = pts[(i + 1) % n];
+    const pa = a.clone().sub(p).normalize().multiplyScalar(r), pb = b.clone().sub(p).normalize().multiplyScalar(r);
+    const p1 = p.clone().add(pa), p2 = p.clone().add(pb);
+    if (i === 0) s.moveTo(p1.x, p1.y); else s.lineTo(p1.x, p1.y);
+    s.quadraticCurveTo(p.x, p.y, p2.x, p2.y);
+  }
+  s.closePath(); return s;
+}
+const frameShape = roundTri(TRI, 0.135);
+const frameCurve = new THREE.CatmullRomCurve3(frameShape.getSpacedPoints(160).slice(0, -1).map(v => new THREE.Vector3(v.x, v.y, 0)), true);
+const frameLit = std({ color: '#84e6a1', emissive: '#8ce6a9', emissiveIntensity: 0.62, roughness: 0.4, metalness: 0.0 });
+part(new THREE.TubeGeometry(frameCurve, 240, 0.052, 16, true), frameLit, torso);
+
+// face panel (display): face.png is sampled from the source video through this camera + the traced torso
+// poses (median of 10 frames); it covers the torso-local box FACE_BOX
+const FACE_BOX = [-0.40, -0.26, 0.40, 0.54];
+const faceGeo = (() => {
+  const g = new THREE.ShapeGeometry(roundTri(TRI.map(v => v.clone().multiplyScalar(0.9)), 0.13), 32);
+  const uv = g.attributes.uv, pos = g.attributes.position, [x0, y0, x1, y1] = FACE_BOX;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, (pos.getX(i) - x0) / (x1 - x0), (pos.getY(i) - y0) / (y1 - y0));
+  return g;
+})();
+const faceTex = await new THREE.TextureLoader().loadAsync('face.png'); faceTex.colorSpace = THREE.SRGBColorSpace; faceTex.anisotropy = 8;
+const faceLit = new THREE.MeshBasicMaterial({ map: faceTex });
+{
+  const face = part(faceGeo, faceLit, torso);
+  face.position.z = -0.012;
+  const back = part(faceGeo, std({ color: '#0c0c10', roughness: 0.6 }), torso);
+  back.position.z = -0.03; back.rotation.y = Math.PI;
+}
+
+// sweatband: rounded trapezoid hugging the triangle's upper sides (local y 0.186..0.28, 90x30 px on screen), terry-cloth fur shells on top.
+// It sits in its own group pivoting at the band centre so it can jiggle on the head (SHAKE.band).
+const BAND_Y0 = 0.186, BAND_Y1 = 0.28, BAND_YC = (BAND_Y0 + BAND_Y1) / 2;
+const bandShape = (() => {
+  const hw = (y) => 0.3795 * (0.438 - y) / 0.657 + 0.078, r = 0.03, s = new THREE.Shape();
+  const P0 = [-hw(BAND_Y0), BAND_Y0 - BAND_YC], P1 = [hw(BAND_Y0), BAND_Y0 - BAND_YC], P2 = [hw(BAND_Y1), BAND_Y1 - BAND_YC], P3 = [-hw(BAND_Y1), BAND_Y1 - BAND_YC];
+  const pts = [P0, P1, P2, P3].map(([x, y]) => new THREE.Vector2(x, y));
+  for (let i = 0; i < 4; i++) {
+    const p = pts[i], a = pts[(i + 3) % 4], b = pts[(i + 1) % 4];
+    const p1 = p.clone().add(a.clone().sub(p).normalize().multiplyScalar(r)), p2 = p.clone().add(b.clone().sub(p).normalize().multiplyScalar(r));
+    if (i === 0) s.moveTo(p1.x, p1.y); else s.lineTo(p1.x, p1.y);
+    s.quadraticCurveTo(p.x, p.y, p2.x, p2.y);
+  }
+  s.closePath(); return s;
+})();
+const bandGeo = new THREE.ExtrudeGeometry(bandShape, { depth: 0.1, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.015, bevelSegments: 6, curveSegments: 8 });
+bandGeo.translate(0, 0, -0.05);
+const BAND_LIFT = 0.021; // measured: screen centroid matched to the plate
+const bandGroup = new THREE.Group(); bandGroup.position.set(0.008, BAND_YC + BAND_LIFT, 0); torso.add(bandGroup);
+const FUR_N = 18;
+const furMats = [];
+const furVS = `uniform float uShell, uLen; varying vec3 vN; varying vec3 vP; varying float vS;
+void main(){ vec3 p = position + normal * uShell * uLen; p.y -= uShell * uShell * uLen * .35;
+  vN = normalize(normalMatrix * normal); vP = position; vS = uShell; gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.); }`;
+const furFS = `uniform vec3 uRoot, uTip, uL; uniform float uDensity, uShell, uLit, uSpeck;
+varying vec3 vN; varying vec3 vP; varying float vS;
+float h3(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+void main(){
+  vec3 cell = floor(vP * uDensity);
+  float r = h3(cell);
+  if(uShell > 0. && r < uShell * 1.05) discard;
+  vec3 n = normalize(vN);
+  float l = mix(1., .45 + .75 * max(dot(n, uL), 0.) + .35 * pow(1. - abs(n.z), 2.), uLit);
+  vec3 c = mix(uRoot, uTip, pow(vS, .7)) * l * mix(.72, 1.12, smoothstep(-.05, .05, vP.y)); // shaded underside, lit top edge
+  if(uSpeck > 0. && h3(cell + 3.1) < uSpeck) c *= .25;
+  gl_FragColor = vec4(c, 1.);
+}`;
+for (let i = 0; i <= FUR_N; i++) {
+  const m = new THREE.ShaderMaterial({
+    uniforms: { uShell: { value: i / FUR_N }, uLen: { value: 0.018 }, uDensity: { value: 560 }, uRoot: { value: col('#a9801a') }, uTip: { value: col('#ffe463') },
+      uL: { value: new THREE.Vector3(0.2, 0.9, 0.5).normalize() }, uLit: { value: 1 }, uSpeck: { value: 0 } },
+    vertexShader: furVS, fragmentShader: furFS,
+  });
+  furMats.push(m);
+  bandGroup.add(new THREE.Mesh(bandGeo, m));
+}
+
+// limbs: noodle tubes rebuilt every frame through the traced joints
+// velvet noodle: sheen gives the soft fuzzy rim the render has
+const limbLit = new THREE.MeshPhysicalMaterial({ color: '#3ea06f', roughness: 0.8, sheen: 1, sheenColor: '#a8f0cc', sheenRoughness: 0.4, emissive: '#439067', emissiveIntensity: 0.75 });
+const limbs = [0, 1, 2, 3].map(() => part(new THREE.BufferGeometry(), limbLit, hero));
+const LIMB_R = [0.026, 0.026, 0.028, 0.028]; // back arm, front arm, leg A, leg B  (measured ~10 px thick)
+// motion blur like the source render (~1/50 s shutter): translucent copies at +-7/14 ms
+const BLUR = [-0.014, -0.007, 0.007, 0.014];
+const ghostMat = std({ color: '#3ea06f', emissive: '#439067', emissiveIntensity: 0.75, roughness: 0.8, transparent: true, opacity: 0.26, depthWrite: false });
+const ghostMeshes = BLUR.map(() => [0, 1, 2, 3].map(() => part(new THREE.BufferGeometry(), ghostMat, hero)));
+
+/* ---------- sparks ---------- */
+const sparks = SPARKS.map(([t, sx, sy]) => {
+  const m = new THREE.SpriteMaterial({ map: canvasTex(128, 256, () => {}), color: '#aef6ff', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  const s = new THREE.Sprite(m); const z = 0.6; s.position.copy(P(sx, sy, z)); s.scale.set(S(46, z), S(92, z), 1);
+  s.userData = { t, seed: -1 }; scene.add(s); return s;
+});
+function drawSpark(s, seed) {
+  const c = s.material.map.image, g = c.getContext('2d'), w = c.width, h = c.height;
+  let r = seed * 9301 + 49297; const rnd = () => ((r = (r * 9301 + 49297) % 233280) / 233280);
+  g.clearRect(0, 0, w, h);
+  const pts = []; let x = w * (0.35 + rnd() * 0.3), y = h * 0.08;
+  pts.push([x, y]); for (let i = 0; i < 5; i++) { x = w * (0.2 + rnd() * 0.6); y += h * (0.12 + rnd() * 0.08); pts.push([x, y]); }
+  g.lineJoin = 'miter'; g.strokeStyle = '#fff';
+  for (const [lw, blur] of [[7, 14], [3, 0]]) { g.shadowColor = 'rgba(160,240,255,.9)'; g.shadowBlur = blur; g.lineWidth = lw; g.beginPath(); pts.forEach(([a, b], i) => i ? g.lineTo(a, b) : g.moveTo(a, b)); g.stroke(); }
+  s.material.map.needsUpdate = true;
+}
+
+
+/* ================================================================== *
+ *  ANIMATION
+ * ================================================================== */
+const cr = (a, b, c, d, t) => 0.5 * (2 * b + (c - a) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (3 * b - a - 3 * c + d) * t * t * t);
+function key(arr, u) { // periodic Catmull-Rom through the 10 poses
+  const n = arr.length, x = (((u % 1) + 1) % 1) * n, i = Math.floor(x), f = x - i;
+  const A = arr[(i + n - 1) % n], B = arr[i], C = arr[(i + 1) % n], D = arr[(i + 2) % n];
+  return B.map((_, k) => cr(A[k], B[k], C[k], D[k], f));
+}
+// sets the torso for loop time t and returns the 4 limb chains (world space)
+function pose(t) {
+  const u = t / RUN + PH0;
+  const [cx, cy, roll] = key(POSE.torso, u);
+  torso.position.copy(P(cx, cy, 0.02));
+  torso.rotation.set(0, HERO_YAW, THREE.MathUtils.degToRad(roll), 'YXZ');
+  torso.updateMatrixWorld(true);
+  const L = (x, y, z) => new THREE.Vector3(x, y, z).applyMatrix4(torso.matrixWorld);
+  const chain = (root, j, z) => [root, P(j[0], j[1], z), P(j[2], j[3], z), P(j[4], j[5], z)];
+  return [
+    chain(L(-0.26, 0.07, -0.05), key(POSE.armB, u), -0.05),
+    chain(L(0.24, 0.0, -0.06), key(POSE.armF, u), -0.06),
+    chain(L(-0.12, -0.27, 0.03), key(POSE.legA, u), 0.05),
+    chain(L(-0.05, -0.28, -0.03), key(POSE.legB, u), -0.05),
+  ];
+}
+// limb = tube through the joints + a round root cap + a hand ball (arms) or a boot capsule along the foot (legs)
+const UP = new THREE.Vector3(0, 1, 0);
+function limbGeo(pts, r, isLeg) {
+  const tubeG = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, false, 'centripetal'), 40, r, 14, false);
+  const root = new THREE.SphereGeometry(r, 14, 10).translate(pts[0].x, pts[0].y, pts[0].z);
+  const a = pts[pts.length - 2], b = pts[pts.length - 1];
+  let end;
+  if (isLeg) {
+    end = new THREE.CapsuleGeometry(r * 1.3, a.distanceTo(b), 6, 14).scale(1, 1, 1.15);
+    end.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(UP, b.clone().sub(a).normalize()));
+    end.translate((a.x + b.x) / 2, (a.y + b.y) / 2 - r * 0.25, (a.z + b.z) / 2);
+  } else end = new THREE.SphereGeometry(r * 1.2, 14, 10).translate(b.x, b.y, b.z);
+  const g = mergeGeometries([tubeG.toNonIndexed(), root.toNonIndexed(), end.toNonIndexed()]);
+  [tubeG, root, end].forEach(x => x.dispose());
+  return g;
+}
+function setTube(mesh, pts, r, i) { mesh.geometry.dispose(); mesh.geometry = limbGeo(pts, r, i >= 2); }
+const codeAlpha = (t) => (t < 0.25 ? 1 : Math.max(0, 1 - (t - 0.25) / 1.1));
+
+function update(t) {
+  BLUR.forEach((dt, k) => pose(t + dt).forEach((pts, i) => setTube(ghostMeshes[k][i], pts, LIMB_R[i], i)));
+  const chains = pose(t);
+  chains.forEach((pts, i) => setTube(limbs[i], pts, LIMB_R[i], i));
+  // treadmill bounce, console lean, bottle lag - keyed to the same stride phase as the runner
+  const u = t / RUN + PH0, k1 = (arr) => key(arr.map(v => [v]), u)[0];
+  const [c0, c1, c2] = key(SHAKE.tm, u);
+  tmRig.position.y = tmRig.userData.rest.y - S(c0, TZ);   // dip
+  tmRig.rotation.z = -c1 / 100;                            // tilt: screen px per px == world m per m at one depth
+  tmRig.scale.y = 1 + c2 / 100;                            // squash toward the floor
+  const [bandTilt, bandSlide] = key(SHAKE.band, u);
+  bandGroup.rotation.z = -0.2 + THREE.MathUtils.degToRad(bandTilt);
+  bandGroup.position.y = BAND_YC + BAND_LIFT + bandSlide;
+  const lean = -k1(SHAKE.armDx) / 112;                    // arm tip sits 112 px above the upright's foot
+  conRig.rotation.z = lean;
+  const [bx, by] = key(SHAKE.bottle, u);
+  bottleRig.position.copy(bottleRig.userData.rest).add(new THREE.Vector3(S(bx, 0.02), -S(by, 0.02), 0));
+  bottleRig.rotation.z = -(bx + 115 * lean) * 0.008;      // lean into its lag relative to the console
+  beltTex.offset.x = ((t * BELT_SPEED / SLAT) % 1 + 1) % 1;
+  bg.material.uniforms.uTop.value = codeAlpha(t);
+  for (const s of sparks) {
+    const d = t - s.userData.t, on = d >= 0 && d < 0.12;
+    s.visible = on;
+    if (on) { const seed = Math.floor(d * 25) + Math.round(s.userData.t * 100); if (seed !== s.userData.seed) { s.userData.seed = seed; drawSpark(s, seed); } }
+  }
+}
+
+scene.traverse(o => {
+  if (!o.isMesh || !o.material || Array.isArray(o.material) && !o.material[0].isMeshStandardMaterial) return;
+  const m = Array.isArray(o.material) ? o.material[0] : o.material;
+  if ((m.isMeshStandardMaterial || m.isShaderMaterial && o.parent === torso) && !m.transparent) { o.castShadow = true; o.receiveShadow = m.isMeshStandardMaterial; }
+});
+limbs.forEach(l => { l.castShadow = true; l.receiveShadow = true; });
+if (frontRim) frontRim.receiveShadow = false;
+
+/* ---------- render ---------- */
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(W * PR, H * PR, { type: THREE.HalfFloatType, samples: 4 }));
+composer.addPass(new RenderPass(scene, camera));
+composer.addPass(new UnrealBloomPass(new THREE.Vector2(W * PR, H * PR), 0.55, 0.4, 0.72));
+composer.addPass(new OutputPass());
+function renderAt(t) { update(t); composer.render(); }
+
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const fixed = qs.has('t') ? +qs.get('t') : null;
+// source frame file -> loop time. The clip is a 25 fps render screen-recorded at 30 fps, so the traced stride's
+// frames map to their pose directly; other files fall back to capture time.
+const POSE_FILES = [277, 278, 279, 280, 281, 283, 284, 285, 286, 288];
+const srcToT = (n) => { const k = POSE_FILES.indexOf(+n), t = k >= 0 ? (k / 10 - PH0) * RUN : (+n - 1) / 30 - 9.467; return ((t % LOOP) + LOOP) % LOOP; };
+if (qs.has('ref')) {
+  const n = qs.get('ref'), ref = document.getElementById('ref'), img = ref.querySelector('img');
+  img.src = `ref/${n}.png`; ref.style.display = 'block'; ref.style.opacity = qs.get('op') ?? '0.5';
+}
+const refT = qs.has('ref') && fixed === null ? srcToT(qs.get('ref')) : null;
+let t0 = null;
+function frame(now) {
+  if (t0 === null) t0 = now;
+  renderAt(fixed ?? refT ?? (reduce ? 0.9 : ((now - t0) / 1000) % LOOP));
+  if (fixed === null && refT === null && !reduce) requestAnimationFrame(frame);
+}
+document.fonts.load(codeFont(24)).catch(() => {}).finally(() => {
+  buildCodeTextures();
+  requestAnimationFrame(frame);
+});
+</script>
+</body>
+</html>

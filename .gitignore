@@ -1,0 +1,20 @@
+# both apps: what's installed or built, never committed
+node_modules
+dist
+.vite
+*.log
+.DS_Store
+
+# your keys and your local data (kits, reviews, the Lab's history): this machine only
+.env*
+!.env.example
+.engine-data
+engine-exports
+exports
+
+# local notes, never pushed
+PROJECT-CONTEXT.md
+ROADMAP.md
+
+# a commercial font (Gilroy): kept on this machine, never on a public repo
+**/public/anim/swiggy-home/fonts/Gilroy-*

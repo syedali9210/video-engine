@@ -1,0 +1,57 @@
+# Components
+
+Every animation from the Desktop projects in one place. Tune it live inside exact iPhone, iPhone Duo, iPad and MacBook
+frames, see what it costs each device, build a screen out of several, check a website on every device, and export the
+code. The films and creatives made from these components live in the Video Engine ([../video-engine](../video-engine)).
+
+```bash
+npm install
+npm run dev      # http://localhost:5181
+npm run check    # suggestion-rule + GPU-math self-check
+npm run posters  # with the dev server up: re-shoot the library cards' stills (public/thumbs)
+npm run build
+```
+
+## What's in it
+
+| Category | Animations | Fetched from |
+| --- | --- | --- |
+| Shaders & GPU | Coins & Notes, Napkin Note, vgpu Detail Maps | `experiment animation/motiscope-output/{webgl,cloth}`, `webgl/vgpu/detail.wgsl` |
+| Characters | Hello, Maze Walk | `portfolio v2/public/scripts/pet-buddy.js`, `animations/…/pet-buddy-hero` |
+| Chat & AI | Chat Quiz, Thinking Cube | `portfolio v2/…/chat-quiz`, `card animation/…/thinking-cube` |
+| Cards & Reveals | Info Notch Card, Scratch Card, Scroll Dissolve Reveal | `animations/src/animations/…`; Scroll Dissolve Reveal is [VengeanceUI](https://github.com/Ashutoshx7/VengeanceUI)'s, as published |
+| Navigation | Tab Hop, Nav Scrubber | `animations/src/animations/…` |
+| Celebration | Payment Success | `animation/src/components/PaymentSuccessScene.tsx` |
+| UI Patterns | Bottom Sheet, Modal, Side Drawer, Toast Stack, Popover Menu | built here, on skeleton loading screens |
+| Swiggy App | Home Screen, and its components on their own: Section Selector, Search Bar, Category Tabs, Offer Cards, Dish Row, Restaurant Cards, 99 Store Cards, Restaurant Feed, Bottom Nav | `swiggy/src/App.tsx` (Figma Make), split into components in `src/animations/_swiggy` |
+
+## Finding your way
+
+- **The Library**: search, the categories down the side, every component drawn as itself. Opening one goes into its
+  devices, with its properties beside it and its way back on the dock.
+- **New** (on the island): a screen built from several components, a website check, or a component from its code.
+- **Ctrl K**: components, actions and places in one field.
+
+## The stage
+
+- **Devices** — iPhone 16 Pro (402×874 @3x, 62pt corners, Dynamic Island), iPhone Duo, iPad Pro 11″ M4 (834×1210 @2x, landscape camera), MacBook Pro 14″ (1512×982, notch + menu bar). Each animation runs in a real iframe at the device's viewport, so CSS breakpoints behave exactly as on the device; the caption shows which Tailwind breakpoint is active. Rotate for landscape, or **Compare** to see all three at true relative size.
+- **iPhone Duo** — Apple's book-style foldable, modelled in 3D: two 5.2 mm titanium slabs (Star White / Night Sky, mirror-polished edges) on a hinge. Folded it's the 5.4″ cover screen (466×678 @3x); open it's the 7.6″ inner screen (951×669 — App Store Connect's size for the 1878×2670 panel); half open the app keeps to the right half, away from the crease (465×669), as a book standing on its edges, or rotated, as a stand with the base on the table (669×465). Status follows iOS 27 on the Duo: one circle in the top-right corner (battery ring, signal dots, Wi-Fi in the middle) with the time under it and the punch-hole camera below. Folding follows Apple's layout, where the open screen's right half matches the cover: opening, the cover turns off, the left half swings away to reveal the app already on the right half, and the app then widens across the whole screen; closing, the app narrows onto the right half, the left half swings over it and the magnets snap it shut, and the app is on the cover in the same place. The animation never reloads — it genuinely resizes, so you see it reflow. `F` folds and unfolds.
+- **Screen builder** — open *Screen builder* at the top of the library, then drag animations out of the library (a live preview follows the pointer and a dashed box shows where it will land) or press **+** on a card to drop it in. Move and resize them on the device, hide or reorder them in the Layers list, tune each one separately, and put an image or video behind them (drop the file on the page). Positions are fractions of the screen, so a layout survives rotation, folding and other devices. Everything on the screen runs together, and the performance chip shows the screen's cost plus a per-layer breakdown. A full app screen makes a real base: drop a sheet, a toast or one of the Swiggy components over the Swiggy Home Screen and the stand-in skeleton (or the component's own backdrop) steps aside.
+- **Reduced motion** emulates `prefers-reduced-motion` inside the frame (media queries, `matchMedia`, Motion).
+- **Native DPR** makes canvases render at the device's pixel ratio, so fill-rate cost is the device's.
+- **Theme** switches the engine and the animations between dark and light, live: the animation inside every device re-themes without reloading. It follows the system until you pick one.
+
+## GPU & perf
+
+Measured in the frame: frame pacing, main-thread work per frame (script + style + layout + paint), GPU time (WebGL2 timer queries, WebGPU work-done), canvas fill and which CSS properties change every frame (compositor / repaint / layout). On localhost each device frame runs on its own site (`iphone.localhost`, …) so Chrome gives it its own process and the numbers don't bleed into each other.
+
+The device GPU load is an **estimate**: host GPU time × (this computer's GPU class ÷ the device chip's throughput), against the device's 120Hz budget (8.3ms). The computer's class is auto-detected and can be corrected from the frame-rate chip.
+
+## Adding an animation
+
+The library is whatever is in `src/animations/` — one folder per animation, found automatically. Run `npm run posters <id>` for its card still; `poster: { at, y }` in its meta picks the moment and where the 4:3 crop sits on the screen.
+
+- **React:** `src/animations/<id>/meta.ts` (name, category, behaviour, schema), `params.ts` (the tunable values), `index.tsx` (default export takes `p`). Export rewrites `params.ts` with the tuned values.
+- **App screens** (a whole screen): `layout: "fill"`, scroll your own container rather than the window, and leave the top 62px and bottom 34px for the device's status bar and home indicator. Call `window.engine?.report("status", { top: "light" | "dark", bottom: "light" | "dark" })` whenever what's under them changes, and the device draws light or dark system ink to match (as `UIStatusBarStyle` does on iOS).
+- **An app's components** (the Swiggy App group is the model): shared components in an underscore folder (`_swiggy/`, not a library item), each one also given its own library folder that previews it in context (`Showcase`) and `includes` the shared folder for export. Motion tokens are CSS variables on the screen's root (`--sw-slide`, `--sw-press`…), so one screen tunes every component inside it. Size things from the screen width (no fixed design-width pixels): rows that don't fit scroll with a deliberate peek, and turn into grids from 768px.
+- **Static page:** `public/anim/<id>/index.html` with `<script src="/engine-bridge.js"></script>` first in `<head>`, a `/* @engine:params */ … /* @engine:end */` block, and `window.engine?.onParams(...)` to apply live changes; plus `src/animations/<id>/meta.ts` with `html: true`. Export bakes the values into the block and drops the bridge.

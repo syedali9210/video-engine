@@ -1,0 +1,58 @@
+{
+ "film-blueprint/photo": {
+  "w": 683,
+  "h": 683
+ },
+ "film-spotlight/dashboard": {
+  "w": 3646,
+  "h": 2387
+ },
+ "film-spotlight/screen2": {
+  "w": 828,
+  "h": 552
+ },
+ "film-spotlight/icon": {
+  "w": 756,
+  "h": 756
+ },
+ "film-liquid/logo": {
+  "w": 120,
+  "h": 120
+ },
+ "film-glide/screen": {
+  "w": 25335,
+  "h": 9750
+ },
+ "film-pop/photo1": {
+  "w": 407,
+  "h": 304
+ },
+ "film-pop/photo4": {
+  "w": 349,
+  "h": 429
+ },
+ "film-quad/screen2": {
+  "w": 536,
+  "h": 1142
+ },
+ "film-quad/screen1": {
+  "w": 298,
+  "h": 634
+ },
+ "film-quad/screen3": {
+  "w": 309,
+  "h": 658
+ },
+ "film-flyover/page": {
+  "w": 1980,
+  "h": 549
+ },
+ "film-flyover/mark": {
+  "w": 66,
+  "h": 69
+ },
+ "film-flyover/screen": {
+  "w": 1088,
+  "h": 680
+ }
+}

@@ -1,0 +1,21 @@
+node_modules
+dist
+.vite
+*.log
+.DS_Store
+.env*
+!.env.example
+.engine-data
+# what the MCP server saves when no project is given, or for the engine itself
+exports
+engine-exports
+# your local setup and context: kept off the public repo
+PROJECT-CONTEXT.md
+# a commercial font (Gilroy): kept on this machine, never on the public repo
+public/anim/swiggy-home/fonts/Gilroy-*
+# the product film's frame captures and soundtrack: rebuilt by video/scripts (capture.mjs, music.py)
+video/public/clips
+video/public/audio
+
+# motiscope analyses of reference videos (frames of other people's films)
+.motiscope/

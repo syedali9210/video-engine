@@ -1,0 +1,1632 @@
+@import "tailwindcss";
+@source ".";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+  Colour system — Raylight's: a neutral tool (Linear / Vercel greys, Geist) where a colour always means something
+  - Selection is azure: the picked row and scene, the outline on the stage, the playhead, the focus ring.
+  - Every kind of thing has its own subtle colour, the same wherever it shows: its icon in Layers and on the canvas
+    toolbar, its track on the timeline, its chip in the inspector. Scenes azure, devices teal, components amber,
+    pictures green, titles magenta, shapes indigo, cursors cyan, callouts slate; animations (Ins, Outs, blocks) violet.
+  - Tints, not paint: a kind colours its icon and a hairline, and fills at 10–30% of it, so the work on the stage is
+    still the loudest thing. Hover is a step of grey.
+  - The primary button, a switch that's on and a slider's fill stay ink: a coloured primary button was rejected.
+  - Elevation by lightness: canvas < surface < overlay. Light mode adds one soft shadow to floating things; dark mode
+    leans on hairline borders, because shadows vanish on dark.
+  - Semantic green / amber / red only where a number is good or bad (frame rate, load), always with a word or shape.
+  - Every text token passes WCAG AA (4.5:1) on the surfaces it is used on; kind colours pass 3:1 as graphics.
+*/
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-overlay: var(--overlay);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --color-good: var(--good);
+  --color-good-ink: var(--good-ink);
+  --color-warn: var(--warn);
+  --color-warn-ink: var(--warn-ink);
+  --color-bad: var(--bad);
+  --color-bad-ink: var(--bad-ink);
+  --color-control-off: var(--control-off);
+  --color-sel: var(--sel);
+  --color-sel-ink: var(--sel-ink);
+  --color-k-scene: var(--k-scene);
+  --color-k-device: var(--k-device);
+  --color-k-component: var(--k-component);
+  --color-k-image: var(--k-image);
+  --color-k-text: var(--k-text);
+  --color-k-shape: var(--k-shape);
+  --color-k-cursor: var(--k-cursor);
+  --color-k-callout: var(--k-callout);
+  --color-k-motion: var(--k-motion);
+  --color-k-effect: var(--k-effect);
+
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", "Cascadia Code", monospace;
+
+  /* type scale: one name per job, so sizes stop drifting */
+  --text-micro: 11px;
+  --text-micro--line-height: 14px;
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-body: 13px;
+  --text-body--line-height: 18px;
+  --text-ui: 14px;
+  --text-ui--line-height: 20px;
+  --text-title: 14px;
+  --text-title--line-height: 20px;
+  --text-heading: 16px;
+  --text-heading--line-height: 22px;
+  --text-lead: 15px;
+  --text-lead--line-height: 22px;
+  --text-section: 20px;
+  --text-section--line-height: 26px;
+  --text-page: 36px;
+  --text-page--line-height: 40px;
+
+  --shadow-xs: var(--sh-xs);
+  --shadow-sm: var(--sh-sm);
+  --shadow-md: var(--sh-md);
+  --shadow-lg: var(--sh-lg);
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+:root {
+  /* Geist (Vercel's design system), measured: neutral greys, one blue, hairlines instead of boxes */
+  color-scheme: light;
+  --canvas: #fafafa; /* background-200: the ground pages sit on */
+  --surface: #ffffff; /* background-100: panels, cards, the header */
+  --surface-2: #f5f5f5; /* gray-100: hover, wells */
+  --surface-3: #ebebeb; /* gray-200: pressed, the active segment's well */
+  --overlay: #ffffff;
+  --line: rgb(0 0 0 / 0.08); /* gray-alpha-400 */
+  --line-strong: rgb(0 0 0 / 0.14);
+  --fg: #171717; /* gray-1000, 17:1 */
+  --fg-2: #5c5c5c; /* 6.6:1 */
+  --fg-3: #737373; /* 4.7:1 on white, 4.5:1 on #fafafa */
+  --accent: #171717;
+  --accent-hover: #383838;
+  --accent-ink: #171717;
+  --accent-soft: rgb(0 0 0 / 0.05);
+  --on-accent: #ffffff;
+  --good: #29a383;
+  --good-ink: #12805c;
+  --warn: #e5a00d;
+  --warn-ink: #a35200;
+  --bad: #e5484d;
+  --bad-ink: #cb2a2f;
+  --control-off: #d4d4d4;
+  --track-off: #ebebeb;
+  /* selection and focus: one blue (Vercel's blue-700 family); the kinds stay for the work's own marks */
+  --sel: #006bff;
+  --sel-ink: #005be7;
+  --k-scene: #0a7cf0;
+  --k-device: #0b968a;
+  --k-component: #b36b05;
+  --k-image: #128a3f;
+  --k-text: #c4268c;
+  --k-shape: #5b52e6;
+  --k-cursor: #0891b2;
+  --k-callout: #64748b;
+  --k-motion: #8a3ff0;
+  --k-effect: #c8461c;
+  --slider-fill: rgb(0 0 0 / 0.06);
+  --slider-fill-hover: rgb(0 0 0 / 0.09);
+  --tip-bg: #171717;
+  --tip-fg: #fafafa;
+  --veil: #fafafa;
+  --sh-xs: 0 1px 1px rgb(0 0 0 / 0.04);
+  --sh-sm: 0 0 0 1px rgb(0 0 0 / 0.08), 0 1px 2px rgb(0 0 0 / 0.04);
+  --sh-md: 0 0 0 1px rgb(0 0 0 / 0.08), 0 4px 8px -2px rgb(0 0 0 / 0.04), 0 16px 24px -8px rgb(0 0 0 / 0.08);
+  --sh-lg: 0 0 0 1px rgb(0 0 0 / 0.08), 0 8px 16px -4px rgb(0 0 0 / 0.06), 0 24px 48px -12px rgb(0 0 0 / 0.14);
+  --sh-device: 0 1px 1px rgb(0 0 0 / 0.06), 0 6px 12px -6px rgb(0 0 0 / 0.12), 0 24px 48px -20px rgb(0 0 0 / 0.22);
+  --sh-panel: 0 0 0 1px rgb(0 0 0 / 0.08);
+  /* depth is a hairline, not a bevel: the lit edge is gone in light, a whisper in dark */
+  --in-hi: 0 0 #0000;
+  --in-well: inset 0 0 0 1px rgb(0 0 0 / 0.08);
+  --btn-ink: #171717;
+  --btn-ink-sh: 0 0 0 1px #171717;
+  --btn-2: #ffffff;
+  --btn-2-sh: 0 0 0 1px rgb(0 0 0 / 0.12), 0 1px 2px rgb(0 0 0 / 0.04);
+  /* the signature: one gradient for the engine's own graphics (never for chrome) */
+  --brand-1: #3d6bff;
+  --brand-2: #8b5cf6;
+  --brand-3: #ff6fae;
+  --brand: linear-gradient(135deg, var(--brand-1), var(--brand-2) 55%, var(--brand-3));
+  --scrim: rgb(0 0 0 / 0.24);
+}
+.dark {
+  color-scheme: dark;
+  --canvas: #000000; /* background-200 */
+  --surface: #0a0a0a; /* background-100 */
+  --surface-2: #1a1a1a; /* gray-100 */
+  --surface-3: #242424;
+  --overlay: #111111;
+  --line: rgb(255 255 255 / 0.09);
+  --line-strong: rgb(255 255 255 / 0.15);
+  --fg: #ededed; /* gray-1000 */
+  --fg-2: #a1a1a1; /* gray-900, 8:1 */
+  --fg-3: #878787; /* 5.6:1 on #0a0a0a */
+  --accent: #ededed;
+  --accent-hover: #ffffff;
+  --accent-ink: #ededed;
+  --accent-soft: rgb(255 255 255 / 0.07);
+  --on-accent: #0a0a0a;
+  --good: #29a383;
+  --good-ink: #4cc38a;
+  --warn: #f5b334;
+  --warn-ink: #ffb224;
+  --bad: #e5484d;
+  --bad-ink: #ff6166;
+  --control-off: #333333;
+  --track-off: #1f1f1f;
+  --sel: #0a84ff;
+  --sel-ink: #52a8ff;
+  --k-scene: #4aa5ff;
+  --k-device: #2fd0bd;
+  --k-component: #f2ae45;
+  --k-image: #4fd88a;
+  --k-text: #f264c4;
+  --k-shape: #8f88ff;
+  --k-cursor: #3ccbe3;
+  --k-callout: #9aa8bb;
+  --k-motion: #b07dff;
+  --k-effect: #ff8159;
+  --slider-fill: rgb(255 255 255 / 0.08);
+  --slider-fill-hover: rgb(255 255 255 / 0.12);
+  --tip-bg: #ededed;
+  --tip-fg: #0a0a0a;
+  --veil: #000000;
+  --sh-xs: 0 0 #0000;
+  --sh-sm: 0 0 0 1px rgb(255 255 255 / 0.1);
+  --sh-md: 0 0 0 1px rgb(255 255 255 / 0.12), 0 16px 32px -8px rgb(0 0 0 / 0.7);
+  --sh-lg: 0 0 0 1px rgb(255 255 255 / 0.12), 0 32px 64px -16px rgb(0 0 0 / 0.8);
+  --sh-device: 0 1px 1px rgb(0 0 0 / 0.5), 0 24px 48px -20px rgb(0 0 0 / 0.7);
+  --sh-panel: 0 0 0 1px rgb(255 255 255 / 0.09);
+  --in-hi: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  --in-well: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+  --btn-ink: #ededed;
+  --btn-ink-sh: 0 0 0 1px #ededed;
+  --btn-2: #0a0a0a;
+  --btn-2-sh: 0 0 0 1px rgb(255 255 255 / 0.15);
+  --scrim: rgb(0 0 0 / 0.5);
+}
+
+/* in layers, so Tailwind utilities can always override them */
+@layer base {
+  html,
+  body {
+    height: 100%;
+    margin: 0;
+  }
+  #root {
+    height: 100%;
+    height: 100dvh;
+  }
+  body {
+    overflow: hidden;
+    background: var(--canvas);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 18px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+  }
+  * {
+    border-color: var(--line);
+  }
+  ::selection {
+    background: var(--accent-soft);
+  }
+  :focus-visible {
+    outline: 2px solid var(--sel);
+    outline-offset: 2px;
+  }
+  .mono {
+    font-family: var(--font-mono);
+    font-feature-settings: normal;
+  }
+
+  .skip-link {
+    position: fixed;
+    left: 12px;
+    top: -60px;
+    z-index: 100;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: var(--fg);
+    color: var(--surface);
+    font-weight: 500;
+  }
+  .skip-link:focus {
+    top: 12px;
+  }
+}
+
+@layer components {
+  /* a kind's colour, Raylight's way (set --k on the element to one of the --k-* tokens): its glyph, a tint behind it,
+     a track (a tinted fill with a hairline in the colour, firmer when picked), and a block on a track */
+  .k-ink {
+    color: var(--k);
+  }
+  .k-tint {
+    background: color-mix(in oklab, var(--k) 14%, transparent);
+  }
+  .k-track {
+    background: color-mix(in oklab, var(--k) 12%, var(--surface));
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--k) 45%, transparent);
+  }
+  .k-track-on {
+    background: color-mix(in oklab, var(--k) 24%, var(--surface));
+    box-shadow: inset 0 0 0 1px var(--k);
+  }
+  .k-block {
+    background: color-mix(in oklab, var(--k) 26%, var(--surface));
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--k) 80%, transparent);
+    color: color-mix(in oklab, var(--k) 55%, var(--fg));
+  }
+  .k-block-on {
+    background: color-mix(in oklab, var(--k) 42%, var(--surface));
+    box-shadow: inset 0 0 0 1.5px var(--k);
+    color: var(--fg);
+  }
+
+  /* pressables answer the press: 0.97 on :active, 160ms ease-out (Emil) */
+  .press {
+    transition:
+      transform 160ms var(--ease-out),
+      background-color 120ms ease,
+      color 120ms ease,
+      box-shadow 120ms ease,
+      opacity 120ms ease;
+  }
+  .press:active {
+    transform: scale(0.97);
+  }
+
+  /* scroll containers are also the containing block, so absolutely placed children (sr-only labels)
+     get clipped with the content instead of widening the page */
+  .scroll-thin,
+  .no-scrollbar {
+    position: relative;
+  }
+  .scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* ---- slider: ink fill up to --p, white knob ---- */
+  .range {
+    --track: 3px;
+    --thumb: 12px;
+    -webkit-appearance: none;
+    appearance: none;
+    display: block;
+    width: 100%;
+    min-width: 0;
+    height: 20px;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  .range-lg {
+    --track: 6px;
+    --thumb: 26px;
+    height: 40px;
+  }
+  .range::-webkit-slider-runnable-track {
+    height: var(--track);
+    border-radius: 999px;
+    background: linear-gradient(to right, var(--accent) var(--p), var(--track-off) var(--p));
+  }
+  .range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: var(--thumb);
+    height: var(--thumb);
+    margin-top: calc((var(--track) - var(--thumb)) / 2);
+    border-radius: 50%;
+    background: #fff;
+    box-shadow:
+      0 0 0 1px rgb(9 9 11 / 0.18),
+      0 1px 3px rgb(9 9 11 / 0.2);
+    transition: transform 160ms var(--ease-out);
+  }
+  .range::-moz-range-track {
+    height: var(--track);
+    border-radius: 999px;
+    background: var(--track-off);
+  }
+  .range::-moz-range-progress {
+    height: var(--track);
+    border-radius: 999px;
+    background: var(--accent);
+  }
+  .range::-moz-range-thumb {
+    width: var(--thumb);
+    height: var(--thumb);
+    border: 0;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow:
+      0 0 0 1px rgb(9 9 11 / 0.18),
+      0 1px 3px rgb(9 9 11 / 0.2);
+  }
+  .range:hover::-webkit-slider-thumb,
+  .range:active::-webkit-slider-thumb {
+    transform: scale(1.25);
+  }
+  .range:focus-visible {
+    outline: none;
+  }
+  .range:focus-visible::-webkit-slider-thumb {
+    box-shadow:
+      0 0 0 2px var(--surface),
+      0 0 0 4px var(--fg);
+  }
+  .range:focus-visible::-moz-range-thumb {
+    box-shadow:
+      0 0 0 2px var(--surface),
+      0 0 0 4px var(--fg);
+  }
+
+  /* ---- tooltip: delay the first, instant after that, grows from its trigger (Emil) ---- */
+  .tip {
+    --tx: -50%;
+    position: absolute;
+    left: 50%;
+    z-index: 70;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+    pointer-events: none;
+    border-radius: 8px;
+    padding: 5px 9px;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 500;
+    color: var(--tip-fg);
+    background: var(--tip-bg);
+    box-shadow: var(--sh-md);
+    transform: translateX(var(--tx));
+    transition:
+      opacity 125ms var(--ease-out),
+      transform 125ms var(--ease-out);
+  }
+  .tip-bottom {
+    top: calc(100% + 8px);
+    transform-origin: top center;
+    --ty: -3px;
+  }
+  .tip-top {
+    bottom: calc(100% + 8px);
+    transform-origin: bottom center;
+    --ty: 3px;
+  }
+  /* beside the rail: to the right, centred on the button */
+  .tip.tip-right {
+    left: calc(100% + 10px);
+    top: 50%;
+    transform: translateY(-50%);
+    transform-origin: left center;
+  }
+  @starting-style {
+    .tip.tip-right {
+      opacity: 0;
+      transform: translate(-3px, -50%) scale(0.97);
+    }
+  }
+  .tip-end {
+    left: auto;
+    right: 0;
+    --tx: 0px;
+    transform-origin: top right;
+  }
+  .tip-start {
+    left: 0;
+    --tx: 0px;
+    transform-origin: top left;
+  }
+  @starting-style {
+    .tip {
+      opacity: 0;
+      transform: translateX(var(--tx)) translateY(var(--ty)) scale(0.97);
+    }
+  }
+  .tip[data-instant="true"] {
+    transition: none;
+  }
+  .tip kbd {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    opacity: 0.6;
+  }
+
+  /* ---- a view arriving (Preview ⇄ Mockup): a short fade, so the swap reads as one place changing ---- */
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  .fade-in {
+    animation: fade-in 200ms var(--ease-out);
+  }
+  /* a web page can keep loading forever (a streaming video): after a while, show whatever it has */
+  @keyframes veil-out {
+    to {
+      opacity: 0;
+      visibility: hidden;
+    }
+  }
+  .veil-late {
+    animation: veil-out 300ms var(--ease-out) 6s forwards;
+  }
+
+  /* ---- popover (native [popover]: top layer, light dismiss and Escape for free), placed under its trigger ---- */
+  .pop {
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    color: var(--fg);
+    background: var(--overlay);
+    border-radius: 16px;
+    box-shadow: var(--sh-lg);
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+    transform-origin: var(--origin, top center);
+    transition:
+      opacity 150ms var(--ease-out),
+      transform 150ms var(--ease-out),
+      overlay 150ms allow-discrete,
+      display 150ms allow-discrete;
+  }
+  .pop:popover-open {
+    opacity: 1;
+    transform: none;
+  }
+  @starting-style {
+    .pop:popover-open {
+      opacity: 0;
+      transform: translateY(-4px) scale(0.98);
+    }
+  }
+
+  /* ---- dialogs (native <dialog>: focus trap, Escape and inert page for free) ---- */
+  dialog {
+    padding: 0;
+    border: 0;
+    color: var(--fg);
+  }
+  dialog::backdrop {
+    background: rgb(9 9 11 / 0);
+    backdrop-filter: blur(0px);
+    transition:
+      background-color 220ms ease,
+      backdrop-filter 220ms ease,
+      overlay 220ms allow-discrete,
+      display 220ms allow-discrete;
+  }
+  dialog[open]::backdrop {
+    background: var(--scrim);
+    backdrop-filter: blur(10px) saturate(1.15);
+  }
+  @starting-style {
+    dialog[open]::backdrop {
+      background: rgb(9 9 11 / 0);
+      backdrop-filter: blur(0px);
+    }
+  }
+  /* drawer: in on the iOS drawer curve, out faster */
+  dialog.drawer {
+    margin: 0;
+    max-width: none;
+    max-height: none;
+    height: 100%;
+    width: min(320px, 88vw);
+    background: var(--surface);
+    box-shadow: var(--sh-lg);
+    transform: translateX(-100%);
+    transition:
+      transform 200ms var(--ease-drawer),
+      overlay 200ms allow-discrete,
+      display 200ms allow-discrete;
+  }
+  dialog.drawer[open] {
+    transform: none;
+    transition-duration: 320ms;
+  }
+  @starting-style {
+    dialog.drawer[open] {
+      transform: translateX(-100%);
+    }
+  }
+  dialog.modal {
+    margin: auto;
+    width: min(440px, calc(100vw - 32px));
+    max-height: min(640px, calc(100dvh - 32px));
+    border-radius: 20px;
+    background: var(--overlay);
+    box-shadow: var(--sh-lg);
+    opacity: 0;
+    transform: scale(0.97);
+    transition:
+      opacity 150ms var(--ease-out),
+      transform 150ms var(--ease-out),
+      overlay 150ms allow-discrete,
+      display 150ms allow-discrete;
+  }
+  dialog.modal[open] {
+    opacity: 1;
+    transform: none;
+    transition-duration: 200ms;
+  }
+  @starting-style {
+    dialog.modal[open] {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+  }
+  /* a workspace in a modal (the template lab): one fixed size, so switching tabs never resizes it */
+  dialog.modal.wide {
+    width: min(980px, calc(100vw - 32px));
+    height: min(760px, calc(100dvh - 32px));
+    max-height: min(760px, calc(100dvh - 32px));
+  }
+
+  /* ---- a notice that arrives on its own (the lab's morning one): drops in from where it rests ---- */
+  .notice {
+    transition:
+      opacity 200ms var(--ease-out),
+      transform 200ms var(--ease-out);
+  }
+  @starting-style {
+    .notice {
+      opacity: 0;
+      transform: translateY(-6px) scale(0.98);
+    }
+  }
+
+  /* ---- phone bottom sheet (non-modal: the stage under it stays live) ---- */
+  .sheet {
+    transform: translateY(100%);
+    visibility: hidden;
+    transition:
+      transform 220ms var(--ease-drawer),
+      visibility 0s linear 220ms;
+  }
+  .sheet[data-open="true"] {
+    transform: none;
+    visibility: visible;
+    transition:
+      transform 400ms var(--ease-drawer),
+      visibility 0s;
+  }
+  .scrim {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 220ms ease;
+  }
+  .scrim[data-open="true"] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .press,
+    .press:active,
+    .range::-webkit-slider-thumb,
+    .tip,
+    .pop,
+    dialog,
+    dialog::backdrop,
+    .sheet,
+    .sheet[data-open="true"],
+    .scrim {
+      transition-duration: 0s !important;
+      transition-delay: 0s !important;
+    }
+    .press:active,
+    .range:active::-webkit-slider-thumb {
+      transform: none;
+    }
+  }
+}
+
+/* tips: how a control works, in a sentence, only when asked for (the rail's ?): the panels show settings, not prose */
+html:not(.tips) .hint {
+  display: none;
+}
+
+/* ---- floating panels: every side panel, dock and sheet sits on the ground as a card ---- */
+@layer components {
+  .panel {
+    background: var(--surface);
+    border-radius: 16px;
+    box-shadow: var(--sh-panel);
+  }
+  /* a group of tools inside a panel or a dock: a darker well (the bottom toolbar's layout switcher) */
+  .well {
+    background: var(--canvas);
+    border-radius: 12px;
+  }
+  .dark .well {
+    background: rgb(0 0 0 / 0.35);
+  }
+}
+
+/* ---- the bottom toolbar: 40 pt tools with 20 px glyphs on a floating card, segments in a darker well. Unlayered on
+   purpose: it sizes the IconButtons and Segmented inside it over their own utilities ---- */
+.dock {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px;
+  border-radius: 18px;
+  background: var(--glass);
+  /* a lighter blur: the page scrolls and changes under it, and every frame of that re-blurs what's behind */
+  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  backdrop-filter: blur(18px) saturate(1.6);
+  box-shadow: var(--glass-hi), 0 0 0 1px var(--glass-line), var(--glass-sh);
+}
+/* the way back out of an editor: the first thing on its dock */
+.dock-back {
+  display: flex;
+  height: 36px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px 0 9px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-2);
+  white-space: nowrap;
+  transition: color 160ms var(--ease-out), background-color 160ms var(--ease-out);
+}
+.dock-back:hover {
+  color: var(--fg);
+  background: var(--glass-pill);
+}
+.dock-back svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 220ms var(--ease-out);
+}
+.dock-back:hover svg {
+  transform: translateX(-2px);
+}
+.dock button.grid {
+  height: 36px;
+  width: 36px;
+  border-radius: 10px;
+}
+.dock button.grid svg {
+  width: 18px;
+  height: 18px;
+}
+.dock [role="radiogroup"] {
+  padding: 3px;
+  border-radius: 11px;
+  background: var(--surface-2);
+}
+.dock [role="radio"] {
+  height: 30px;
+  min-width: 34px;
+  border-radius: 8px;
+}
+.dock [role="radio"] svg {
+  width: 17px;
+  height: 17px;
+}
+.dock .dock-sep {
+  margin: 0 4px;
+  height: 20px;
+  width: 1px;
+  flex-shrink: 0;
+  background: var(--line-strong);
+}
+/* the ground a stage sits on: a quiet dot grid, the way a design tool's canvas reads as space */
+.stage-ground {
+  background-color: var(--canvas);
+  background-image: radial-gradient(var(--line-strong) 1px, transparent 1.2px);
+  background-size: 20px 20px;
+  background-position: -10px -10px;
+}
+
+/* ---- the AI at work (Thinking.tsx): glyphs that move, words that shimmer ---- */
+@layer components {
+  .think {
+    color: var(--fg);
+  }
+  .think-roll {
+    animation: think-roll 2.4s linear infinite;
+  }
+  @keyframes think-roll {
+    to {
+      transform: translateY(-24px);
+    }
+  }
+  .think-sweep {
+    animation: think-sweep 1.6s cubic-bezier(0.65, 0, 0.35, 1) infinite alternate;
+  }
+  @keyframes think-sweep {
+    from {
+      transform: translateX(1px);
+    }
+    to {
+      transform: translateX(21.6px);
+    }
+  }
+  .think-bar {
+    animation: think-bar 1.6s cubic-bezier(0.65, 0, 0.35, 1) infinite alternate;
+  }
+  @keyframes think-bar {
+    to {
+      transform: translateX(10px);
+    }
+  }
+  .think-pulse {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: think-pulse 1.1s cubic-bezier(0.65, 0, 0.35, 1) infinite alternate;
+  }
+  @keyframes think-pulse {
+    from {
+      transform: scaleY(0.25);
+    }
+  }
+  .shimmer {
+    background: linear-gradient(90deg, var(--fg-3) 0%, var(--fg-3) 35%, var(--fg) 50%, var(--fg-3) 65%, var(--fg-3) 100%);
+    background-size: 220% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: shimmer 1.8s linear infinite;
+  }
+  @keyframes shimmer {
+    from {
+      background-position: 110% 0;
+    }
+    to {
+      background-position: -110% 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .think-roll,
+    .think-sweep,
+    .think-bar,
+    .think-pulse {
+      animation: none;
+    }
+    .shimmer {
+      animation: none;
+      color: var(--fg-2);
+      background: none;
+    }
+  }
+}
+
+/* ---- the review sheet: slides in from the right edge, over whatever is open ---- */
+@layer components {
+  .side-sheet {
+    opacity: 0;
+    transform: translateX(24px);
+    pointer-events: none;
+    transition:
+      opacity 220ms var(--ease-out),
+      transform 280ms var(--ease-drawer);
+    box-shadow: var(--sh-panel), 0 30px 80px -24px rgb(0 0 0 / 0.55);
+  }
+  .side-sheet[data-open="true"] {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .side-sheet {
+      transition-duration: 0s;
+    }
+  }
+}
+
+/* ---- a tool window arriving: from slightly smaller, where it opens ---- */
+@layer components {
+  @keyframes float-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px) scale(0.98);
+    }
+  }
+  .float-in {
+    animation: float-in 200ms var(--ease-out);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .float-in {
+      animation: none;
+    }
+  }
+}
+
+/* ---- the design system's skins (DESIGN-SYSTEM.md): raised things are lit along the top, things you type into are
+   recessed, every press gives, and hover is a veil of the element's own colour ---- */
+@layer components {
+  .panel {
+    box-shadow: var(--in-hi), var(--sh-panel);
+  }
+  .btn {
+    position: relative;
+    isolation: isolate;
+  }
+  /* hover: a veil of its own ink, so it works on every skin */
+  .btn::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: currentColor;
+    opacity: 0;
+    transition: opacity 150ms ease;
+    pointer-events: none;
+  }
+  .btn:hover::after {
+    opacity: 0.06;
+  }
+  .btn-ink:hover::after {
+    opacity: 0.12;
+  }
+  .btn-ink {
+    background: var(--btn-ink);
+    box-shadow: var(--btn-ink-sh);
+    color: var(--on-accent);
+  }
+  .btn-2 {
+    background: var(--btn-2);
+    box-shadow: var(--btn-2-sh);
+    color: var(--fg);
+  }
+  /* a chip (a filter, a tag): raised like a small button */
+  .chip {
+    background: var(--btn-2);
+    box-shadow: var(--btn-2-sh);
+  }
+  .chip[aria-pressed="true"] {
+    background: var(--btn-ink);
+    box-shadow: var(--btn-ink-sh);
+    color: var(--on-accent);
+  }
+  /* a card that can be opened: it lifts toward you under the pointer */
+  .lift {
+    transition: transform 200ms var(--ease-out);
+  }
+  @media (hover: hover) {
+    .lift:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 0 1px var(--line-strong), 0 14px 30px -14px rgb(0 0 0 / 0.45);
+    }
+  }
+  /* a section, a reveal, a step arriving: up a little, out of a little blur */
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+  .rise-in {
+    animation: rise-in 200ms var(--ease-out) both;
+  }
+  /* the signature gradient as type */
+  .brand-text {
+    background: var(--brand);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lift,
+    .lift:hover {
+      transition: none;
+      transform: none;
+    }
+    .rise-in {
+      animation: none;
+    }
+  }
+}
+
+/* ---- a section below the fold isn't laid out or painted until it's near the screen: a page arrives in one light
+   frame instead of laying out every card it holds (the browser keeps its last size once it has been seen) ---- */
+@layer components {
+  .below-fold {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 640px;
+  }
+}
+
+/* ---- a place holding its shape while it loads: a soft light passing over it (States.tsx Skeleton) ---- */
+@layer components {
+  .skeleton {
+    border-radius: 12px;
+    background: linear-gradient(100deg, var(--surface-2) 30%, color-mix(in srgb, var(--surface-3) 70%, var(--surface-2)) 50%, var(--surface-2) 70%) 0 0 / 300% 100%;
+    animation: skeleton 1.6s linear infinite;
+  }
+  @keyframes skeleton {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: -50% 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton {
+      animation: none;
+    }
+  }
+}
+
+/* ---- the command palette: high on the screen, wide, one fixed height so results never jump it ---- */
+@layer components {
+  dialog.modal.palette {
+    margin-top: 12vh;
+    width: min(640px, calc(100vw - 32px));
+    height: min(520px, calc(100dvh - 16vh));
+    max-height: min(520px, calc(100dvh - 16vh));
+    border-radius: 22px;
+    box-shadow: var(--in-hi), var(--sh-lg);
+  }
+}
+
+/* ---- a toast: pops up from below on a little spring ---- */
+@layer components {
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.96);
+    }
+  }
+  .pop-in {
+    animation: pop-in 260ms var(--ease-spring);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pop-in {
+      animation: none;
+    }
+  }
+}
+
+/* ---- a modal of cards (templates): wider than a form, narrower than a workspace ---- */
+@layer components {
+  dialog.modal.medium {
+    width: min(760px, calc(100vw - 32px));
+    max-height: min(720px, calc(100dvh - 32px));
+  }
+}
+
+/* ---- the fun layer (fun.tsx) ---- */
+/* places change: the old fades, the new rises in; the app bar is its own group, so it holds still */
+.app-bar {
+  view-transition-name: app-bar;
+}
+html.vt-swap::view-transition-old(root) {
+  animation: 120ms ease both vt-out;
+}
+html.vt-swap::view-transition-new(root) {
+  animation: 240ms cubic-bezier(0.23, 1, 0.32, 1) both vt-in;
+}
+@keyframes vt-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes vt-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@layer components {
+  /* the mark: its handles breathe under the pointer, and it hops when it dances */
+  .live-logo .h1,
+  .live-logo .h2 {
+    transform-box: fill-box;
+    transform-origin: center;
+    transition: transform 300ms var(--ease-spring);
+  }
+  button:hover > .live-logo .h1 {
+    transform: translate(-1px, 1px) scale(1.25);
+  }
+  button:hover > .live-logo .h2 {
+    transform: translate(1px, -1px) scale(1.25);
+  }
+  .live-logo.dancing {
+    animation: logo-hop 1300ms var(--ease-spring);
+  }
+  @keyframes logo-hop {
+    20% {
+      transform: translateY(-3px) rotate(-8deg);
+    }
+    45% {
+      transform: translateY(0) rotate(6deg);
+    }
+    70% {
+      transform: translateY(-2px) rotate(-3deg);
+    }
+  }
+  /* z's drifting up off a sleeping list */
+  .snooze {
+    opacity: 0;
+    animation: snooze 2.4s ease-in-out infinite;
+  }
+  @keyframes snooze {
+    20% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translate(6px, -12px);
+    }
+  }
+  /* Home's paper plane: across the sky now and then, bobbing on the air */
+  /* on layers of their own: moved by the compositor, never a repaint of the sky under them (that cost ~half the frame) */
+  .plane {
+    animation: plane-fly 22s linear infinite;
+    animation-delay: 2.5s;
+    transform: translateX(-60px);
+    will-change: transform;
+  }
+  .plane > span {
+    display: block;
+    animation: plane-bob 2.2s ease-in-out infinite alternate;
+    will-change: transform;
+  }
+  @keyframes plane-fly {
+    0% {
+      transform: translateX(-60px);
+    }
+    40%,
+    100% {
+      transform: translateX(calc(100cqw + 60px));
+    }
+  }
+  @keyframes plane-bob {
+    from {
+      transform: translateY(-5px) rotate(-3deg);
+    }
+    to {
+      transform: translateY(5px) rotate(4deg);
+    }
+  }
+  .plane.caught > span {
+    animation: plane-loop 900ms cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  @keyframes plane-loop {
+    50% {
+      transform: translateY(-26px) rotate(-180deg) scale(1.2);
+    }
+    to {
+      transform: translateY(0) rotate(-360deg);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .live-logo.dancing,
+    .snooze,
+    .plane,
+    .plane > span {
+      animation: none;
+    }
+    .plane {
+      display: none;
+    }
+    .snooze {
+      opacity: 1;
+    }
+  }
+}
+
+/* ---- a film reviewed: wide enough for the film to play big beside its verdict ---- */
+@layer components {
+  dialog.modal.review {
+    width: min(1180px, calc(100vw - 48px));
+    height: min(780px, calc(100dvh - 48px));
+    max-height: min(780px, calc(100dvh - 48px));
+    overflow: hidden;
+  }
+}
+
+
+/* ======================================================================================================================
+   Round 25: the island. One floating glass bar at the bottom of the window is how you move around (Home, Library,
+   Films, Creatives, Lab, find, new, you). In an editor the same glass is the editor's dock, and its first button is
+   the way back. Pages above it are galleries: a big title, one row of category pills, the work drawn big.
+   ====================================================================================================================== */
+:root {
+  --glass: rgb(252 252 253 / 0.74);
+  --glass-line: rgb(0 0 0 / 0.08);
+  --glass-hi: inset 0 1px 0 rgb(255 255 255 / 0.9);
+  --glass-sh: 0 1px 2px rgb(0 0 0 / 0.05), 0 12px 32px -10px rgb(0 0 0 / 0.16), 0 32px 64px -28px rgb(0 0 0 / 0.22);
+  --glass-pill: rgb(0 0 0 / 0.06);
+  --glass-pill-hi: inset 0 1px 0 rgb(255 255 255 / 0.7), inset 0 0 0 1px rgb(0 0 0 / 0.04);
+  --ease-island: cubic-bezier(0.32, 1.2, 0.5, 1);
+  --glow-a: rgb(61 107 255 / 0.1);
+  --glow-b: rgb(139 92 246 / 0.07);
+}
+.dark {
+  --glass: rgb(28 28 31 / 0.62);
+  --glass-line: rgb(255 255 255 / 0.1);
+  --glass-hi: inset 0 1px 0 rgb(255 255 255 / 0.07);
+  --glass-sh: 0 0 0 1px rgb(0 0 0 / 0.55), 0 16px 40px -10px rgb(0 0 0 / 0.75), 0 40px 80px -30px rgb(0 0 0 / 0.7);
+  --glass-pill: rgb(255 255 255 / 0.1);
+  --glass-pill-hi: inset 0 1px 0 rgb(255 255 255 / 0.1), inset 0 0 0 1px rgb(255 255 255 / 0.04);
+  --glow-a: rgb(61 107 255 / 0.16);
+  --glow-b: rgb(139 92 246 / 0.1);
+}
+
+.island-wrap {
+  position: fixed;
+  inset: auto 0 18px 0;
+  z-index: 45;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  padding: 0 16px;
+}
+.island {
+  pointer-events: auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 6px;
+  border-radius: 22px;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(28px) saturate(1.8);
+  backdrop-filter: blur(28px) saturate(1.8);
+  box-shadow: var(--glass-hi), 0 0 0 1px var(--glass-line), var(--glass-sh);
+  animation: island-in 520ms var(--ease-out) both;
+}
+@keyframes island-in {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.96);
+    filter: blur(6px);
+  }
+}
+.island-sep {
+  margin: 0 6px;
+  height: 24px;
+  width: 1px;
+  flex-shrink: 0;
+  background: var(--glass-line);
+}
+/* a place: its glyph and its name, always both */
+.island-item {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  height: 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px 0 12px;
+  border-radius: 16px;
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: var(--fg-2);
+  white-space: nowrap;
+  transition: color 160ms var(--ease-out);
+}
+.island-item svg {
+  width: 19px;
+  height: 19px;
+  flex-shrink: 0;
+  transition: transform 260ms var(--ease-island);
+}
+.island-item:hover,
+.island-item[aria-current="page"] {
+  color: var(--fg);
+}
+@media (hover: hover) and (pointer: fine) {
+  .island-item:hover svg {
+    transform: translateY(-1.5px);
+  }
+}
+.island-item:active svg {
+  transform: scale(0.9);
+}
+/* where you are: a lit pill that springs from place to place */
+.island-pill {
+  position: absolute;
+  left: 0;
+  top: 6px;
+  height: 44px;
+  border-radius: 16px;
+  background: var(--glass-pill);
+  box-shadow: var(--glass-pill-hi);
+  /* it moves by transform alone, on the compositor (ui.tsx useFlip) */
+  transform-origin: 0 0;
+  will-change: transform;
+  pointer-events: none;
+}
+.island-icon {
+  position: relative;
+  display: grid;
+  height: 44px;
+  width: 44px;
+  place-items: center;
+  border-radius: 16px;
+  color: var(--fg-2);
+  transition:
+    color 160ms var(--ease-out),
+    background-color 160ms var(--ease-out);
+}
+.island-icon:hover,
+.island-icon[aria-expanded="true"] {
+  color: var(--fg);
+  background: var(--glass-pill);
+}
+.island-icon svg {
+  width: 19px;
+  height: 19px;
+}
+.island-new {
+  display: flex;
+  height: 44px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px 0 13px;
+  border-radius: 16px;
+  background: var(--fg);
+  color: var(--surface);
+  font-size: 13.5px;
+  font-weight: 600;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 6px 16px -6px rgb(0 0 0 / 0.5);
+  transition: transform 160ms var(--ease-out);
+}
+.island-new svg {
+  width: 16px;
+  height: 16px;
+}
+.island-new:hover {
+  transform: translateY(-1px);
+}
+.island-new:active {
+  transform: scale(0.97);
+}
+.island-badge {
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--sel);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.island-dot {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  height: 7px;
+  width: 7px;
+  border-radius: 999px;
+  background: var(--sel);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+@media (max-width: 1080px) {
+  /* a narrower window: the places keep their glyphs and lose their names (each still says it on hover) */
+  .island-item .label {
+    display: none;
+  }
+  .island-item {
+    padding: 0 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .island,
+  .island-pill,
+  .island-item svg {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* a gallery page: a soft light from above (the engine's own blue and violet, barely there) over the ground */
+.page-ground {
+  background:
+    radial-gradient(60% 40% at 18% -8%, var(--glow-a), transparent 70%),
+    radial-gradient(50% 36% at 82% -10%, var(--glow-b), transparent 70%),
+    var(--canvas);
+}
+
+/* category pills: one row, the picked one lit, a pill that slides to it */
+.pills {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.pills::-webkit-scrollbar {
+  display: none;
+}
+.pill-item {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  height: 32px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-3);
+  white-space: nowrap;
+  transition: color 160ms var(--ease-out);
+}
+.pill-item:hover,
+.pill-item[aria-selected="true"] {
+  color: var(--fg);
+}
+.pill-item svg {
+  width: 15px;
+  height: 15px;
+}
+.pill-item .n {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-3);
+}
+.pill-glide {
+  position: absolute;
+  left: 0;
+  top: 4px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line-strong), 0 1px 2px rgb(0 0 0 / 0.12);
+  transform-origin: 0 0;
+  will-change: transform;
+  pointer-events: none;
+}
+.dark .pill-glide {
+  background: var(--surface-3);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 0 0 1px var(--line);
+}
+@media (prefers-reduced-motion: reduce) {
+  .pill-glide {
+    transition: none;
+  }
+}
+
+/* a card in a gallery: the work big, its name and one line under it */
+/* ---- cards with depth: every gallery card and Home's tiles ----
+   Resting, a card sits on a soft two-part shadow (a tight contact one and a wide ambient one); under the pointer it
+   lifts 4 px onto a deeper shadow while its picture eases in a little; pressed, it gives. In dark the ground eats
+   shadows, so a hairline and a lit top edge carry the edge and the shadow goes deep and black. */
+:root {
+  --tile-sh: 0 0 0 1px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 20px -8px rgb(0 0 0 / 0.1), 0 24px 48px -24px rgb(0 0 0 / 0.16);
+  --tile-sh-up: 0 0 0 1px rgb(0 0 0 / 0.08), 0 2px 4px rgb(0 0 0 / 0.04), 0 18px 36px -12px rgb(0 0 0 / 0.18), 0 44px 80px -30px rgb(0 0 0 / 0.26);
+  --print-sh: 0 0 0 1px rgb(0 0 0 / 0.08), 0 2px 4px rgb(0 0 0 / 0.06), 0 14px 28px -12px rgb(0 0 0 / 0.38);
+}
+.dark {
+  --tile-sh: 0 0 0 1px rgb(255 255 255 / 0.08), inset 0 1px 0 rgb(255 255 255 / 0.05), 0 18px 40px -18px rgb(0 0 0 / 0.95);
+  --tile-sh-up: 0 0 0 1px rgb(255 255 255 / 0.15), inset 0 1px 0 rgb(255 255 255 / 0.08), 0 30px 60px -20px rgb(0 0 0 / 1);
+  --print-sh: 0 0 0 1px rgb(255 255 255 / 0.12), 0 16px 32px -12px rgb(0 0 0 / 0.95);
+}
+.card-shot {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--surface-2);
+  box-shadow: var(--tile-sh);
+  transition:
+    transform 260ms var(--ease-out),
+    box-shadow 260ms var(--ease-out);
+}
+.card-shot > :first-child {
+  transition: transform 600ms var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .card:hover .card-shot {
+    transform: translateY(-4px);
+    box-shadow: var(--tile-sh-up);
+  }
+  .card:hover .card-shot > :first-child {
+    transform: scale(1.035);
+  }
+}
+.card:active .card-shot {
+  transform: translateY(-1px) scale(0.985);
+  transition-duration: 120ms;
+}
+.card-open {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: grid;
+  height: 32px;
+  width: 32px;
+  place-items: center;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.55);
+  color: #fff;
+  opacity: 0;
+  transform: translateY(4px);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  transition:
+    opacity 200ms var(--ease-out),
+    transform 200ms var(--ease-out);
+}
+.card:hover .card-open,
+.card:focus-visible .card-open {
+  opacity: 1;
+  transform: none;
+}
+
+/* a tile: one of Home's cards. `lifts` when the whole of it opens something */
+.tile {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: var(--tile-sh);
+  transition:
+    transform 280ms var(--ease-out),
+    box-shadow 280ms var(--ease-out);
+}
+.tile-media > * {
+  transition: transform 700ms var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .tile.lifts:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--tile-sh-up);
+  }
+  .tile.lifts:hover .tile-media > * {
+    transform: scale(1.03);
+  }
+}
+.tile.lifts:active {
+  transform: translateY(-1px) scale(0.995);
+  transition-duration: 120ms;
+}
+
+/* a pile of prints: the top one whole, the ones under it peeking out above, smaller and dimmer; under the pointer
+   the pile fans out like cards in a hand. --k is how deep a print lies (0 on top), --s which way it fans (-1, 0, 1) */
+.stack {
+  position: relative;
+}
+.stack > .print {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--w, 70%);
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--surface-2);
+  box-shadow: var(--print-sh);
+  z-index: calc(10 - var(--k));
+  /* at rest the pile is a little untidy, the way prints lie on a desk */
+  transform: translate(-50%, -50%) translateX(calc(var(--s) * 7%)) translateY(calc(var(--k) * -14px)) rotate(calc(var(--s) * 3.5deg)) scale(calc(1 - var(--k) * 0.06));
+  transition:
+    transform 460ms cubic-bezier(0.34, 1.22, 0.64, 1),
+    opacity 300ms var(--ease-out);
+}
+.stack > .print:not(:first-child) {
+  opacity: 0.8;
+}
+@media (hover: hover) and (pointer: fine) {
+  .group:hover .stack > .print {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateX(calc(var(--s) * var(--spread, 30%))) translateY(calc(var(--k) * -3px)) rotate(calc(var(--s) * 6deg)) scale(calc(1 - var(--k) * 0.04));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-shot,
+  .card-shot > :first-child,
+  .card-open,
+  .tile,
+  .tile-media > *,
+  .stack > .print {
+    transition: none;
+  }
+}
+
+/* a long list of categories down the side: rows with a glyph, the name and how many, the picked one lit */
+.side-item {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  height: 38px;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px 0 11px;
+  border-radius: 11px;
+  font-size: 14px;
+  color: var(--fg-2);
+  text-align: left;
+  transition: color 160ms var(--ease-out);
+}
+.side-item svg {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  color: var(--fg-3);
+  transition: color 160ms var(--ease-out);
+}
+.side-item:hover,
+.side-item[aria-selected="true"] {
+  color: var(--fg);
+}
+.side-item[aria-selected="true"] {
+  font-weight: 500;
+}
+.side-item[aria-selected="true"] svg {
+  color: var(--fg);
+}
+.side-item .n {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-3);
+}
+.side-glide {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  border-radius: 11px;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line-strong), 0 1px 2px rgb(0 0 0 / 0.12);
+  transform-origin: 0 0;
+  will-change: transform;
+  pointer-events: none;
+}
+.dark .side-glide {
+  background: var(--surface-2);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 0 0 1px var(--line);
+}
+@media (prefers-reduced-motion: reduce) {
+  .side-glide {
+    transition: none;
+  }
+}

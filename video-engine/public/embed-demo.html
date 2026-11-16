@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- The engine's Interactive section shows this page on every device: a film embedded in a page the way a site
+         would embed it (embed.js sizes it per breakpoint and drives scroll-to-play). The film comes in the hash. -->
+    <title>A page with the film</title>
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #fafafa;
+        --fg: #18181b;
+        --mute: #6b6b74;
+        --bar: #e7e7ea;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0b0b0c;
+          --fg: #fafafa;
+          --mute: #8b8b94;
+          --bar: #1e1e22;
+        }
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font: 15px/1.55 Geist, ui-sans-serif, system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      main {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: clamp(32px, 7vw, 72px) clamp(16px, 4vw, 40px) 96px;
+      }
+      .kicker {
+        margin: 0;
+        color: var(--mute);
+        font-size: 13px;
+      }
+      h1 {
+        margin: 6px 0 14px;
+        font-size: clamp(26px, 4.4vw, 44px);
+        line-height: 1.08;
+        letter-spacing: -0.02em;
+        font-weight: 600;
+      }
+      .bar {
+        height: 10px;
+        margin: 10px 0;
+        border-radius: 5px;
+        background: var(--bar);
+      }
+      .engine-film {
+        display: block;
+        margin: clamp(28px, 5vw, 48px) 0;
+        border: 0;
+        border-radius: clamp(10px, 1.4vw, 16px);
+        overflow: hidden;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 20px;
+        margin-top: 40px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="kicker">Case study</p>
+      <h1 id="name">Product film</h1>
+      <div class="bar" style="width: 78%"></div>
+      <div class="bar" style="width: 64%"></div>
+      <iframe class="engine-film" title="Product film" allow="autoplay"></iframe>
+      <div class="bar" style="width: 72%"></div>
+      <div class="bar" style="width: 58%"></div>
+      <div class="bar" style="width: 66%"></div>
+      <div class="grid">
+        <div><div class="bar" style="width: 90%"></div><div class="bar" style="width: 70%"></div><div class="bar" style="width: 80%"></div></div>
+        <div><div class="bar" style="width: 85%"></div><div class="bar" style="width: 60%"></div><div class="bar" style="width: 75%"></div></div>
+      </div>
+      <div style="height: 60vh"></div>
+    </main>
+    <script>
+      // the film and its settings ride in this page's hash, as they would in the player's link. n= repeats it down
+      // the page, the way a portfolio of many films would embed them: each with its link in data-src, so embed.js
+      // loads them as they come near, a few at a time
+      const q = new URLSearchParams(location.hash.slice(1))
+      const f = document.querySelector(".engine-film")
+      f.dataset.src = "/play.html" + location.hash
+      const n = Math.min(24, Math.max(1, Number(q.get("n")) || 1))
+      for (let i = 1; i < n; i++) {
+        const gap = Object.assign(document.createElement("div"), { className: "bar" })
+        gap.style.width = `${50 + ((i * 17) % 40)}%`
+        const copy = f.cloneNode()
+        copy.title = `Product film ${i + 1}`
+        document.querySelector("main").append(gap, copy)
+      }
+      const name = q.get("name")
+      if (name) document.getElementById("name").textContent = name
+    </script>
+    <script src="/embed.js" defer></script>
+  </body>
+</html>

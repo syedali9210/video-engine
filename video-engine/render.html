@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- the mockup studio's export page: headless Chrome renders it frame by frame -->
+    <title>Studio render</title>
+    <!-- an export must not reload when a file is saved mid-render: the dev server's live-reload socket is never opened here -->
+    <script>
+      (() => {
+        const WS = window.WebSocket
+        const quiet = function (url, protocols) {
+          if (String(protocols ?? "").includes("vite-hmr")) return { readyState: 0, send() {}, close() {}, addEventListener() {}, removeEventListener() {} }
+          return new WS(url, protocols)
+        }
+        quiet.prototype = WS.prototype
+        Object.assign(quiet, { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 })
+        window.WebSocket = quiet
+      })()
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/studio/render.tsx"></script>
+  </body>
+</html>

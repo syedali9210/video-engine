@@ -1,0 +1,55 @@
+import type { AnimMeta } from "../../registry";
+import { params } from "./params";
+
+export default {
+  name: "Horizon launch",
+  poster: { at: 5400 },
+  category: "Launch films",
+  tech: ["React", "Deterministic timeline", "CSS 3D glass cards", "SVG orbits"],
+  blurb:
+    "A 23.6 s launch film in deep space: blue squares drifting on a grid round an icon in a selection, the camera tilting up to a planet's glowing horizon, the name introduced in light, glass panels of the product tilted in the dark, scattered addresses, words in pills, a comet through orbit rings, an aurora end card.",
+  source: "Built for the engine, replicating the Arcane Pay launch film (measured cut by cut)",
+  behavior: { trigger: "sequence", frequency: "rare" },
+  reducedMotion: "none",
+  reducedMotionNote: "It's a film: it plays as cut. Export it as a video for places that respect reduced motion.",
+  layout: "fill",
+  deps: ["react"],
+  includes: ["_film"],
+  load: () => import("./index"),
+  params,
+  // its cuts, each tagged with what it does in a film (studio/shots.ts)
+  film: {
+    size: "16x9",
+    end: 23.6,
+    look: "space",
+    chrome: ["Send", "Recv"],
+    shots: [
+      { name: "Grid", at: 0, role: ["hook", "logo"], energy: 2, enter: "cut", exit: "pan" },
+      { name: "Horizon", at: 2.75, role: ["intro"], energy: 2, enter: "pan", exit: "cut" },
+      { name: "Panels", at: 5.6, role: ["product", "feature"], energy: 2, enter: "cut", exit: "cut" },
+      { name: "Addresses", at: 9.87, role: ["feature", "detail"], energy: 1, enter: "cut", exit: "cut" },
+      { name: "Pills", at: 11.63, role: ["feature"], energy: 2, enter: "cut", exit: "cut" },
+      { name: "Orbit", at: 15.87, role: ["feature", "proof"], energy: 3, enter: "cut", exit: "cut" },
+      { name: "Switch", at: 18.7, role: ["feature", "product"], energy: 2, enter: "cut", exit: "cut" },
+      { name: "End card", at: 21.1, role: ["logo", "cta"], energy: 1, enter: "cut", exit: "hold" },
+    ],
+  },
+  schema: {
+    name: { type: "text", label: "Name", group: "Product" },
+    product: { type: "text", label: "Product", group: "Product", hint: "What's introduced (the name and its line)." },
+    accent: { type: "color", label: "Accent", group: "Product" },
+    from: { type: "text", label: "Opening line", group: "Story" },
+    to: { type: "text", label: "Second line", group: "Story" },
+    promise: { type: "text", label: "The promise", group: "Story" },
+    send: { type: "text", label: "Beside the panel", group: "Story" },
+    wallet: { type: "text", label: "Panel, second line", group: "Story" },
+    import: { type: "text", label: "Among the addresses", group: "Story" },
+    easy: { type: "text", label: "Beside the import", group: "Story" },
+    pills: { type: "text", label: "Pill lines", group: "Story", hint: "Pill|line|pill|line." },
+    orbit: { type: "text", label: "Under the comet", group: "Story", hint: "Two lines, split by |." },
+    switch: { type: "text", label: "Last panel", group: "Ending", hint: "A line|the button." },
+    tagline: { type: "text", label: "Tagline", group: "Ending" },
+    url: { type: "text", label: "Address", group: "Ending" },
+    unit: { type: "text", label: "Currency", group: "Product" },
+  },
+} satisfies Omit<AnimMeta, "id">;

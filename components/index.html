@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#111113" />
+    <meta name="description" content="Tune animations live inside exact iPhone, iPad and MacBook frames, check what they cost each device, and export the code." />
+    <title>Components</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='7' fill='%2318181b'/%3E%3Cpath d='M6 17C11 17 13 7 18 7' stroke='%23fff' stroke-width='2' stroke-linecap='round' fill='none'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+    <script>
+      // ponytail: the engine runs on the dev server (its server routes load source through it), so it runs React's
+      // development build, which tags every element it makes with console.createTask for DevTools' async stacks: most of
+      // a page's mount time. Without it React keeps its plain component stacks. A production server would drop it all.
+      console.createTask = undefined;
+      // theme before first paint: the saved choice, else (none, or "auto") the system's
+      try {
+        var saved = localStorage.getItem("anim-engine:dark");
+        var picked = saved ? JSON.parse(saved) : null;
+        var dark = picked == null ? matchMedia("(prefers-color-scheme: dark)").matches : picked;
+        document.documentElement.classList.toggle("dark", dark);
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

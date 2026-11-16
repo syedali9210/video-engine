@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="<!-- figma:lang -->">
+  <head>
+<script src="/engine-bridge.js"></script>
+<script>
+/* @engine:params */
+const params = {};
+/* @engine:end */
+const UNITS = {};
+const applyParams = () => { for (const [k, v] of Object.entries(params)) document.documentElement.style.setProperty("--ae-" + k, v + (UNITS[k] || "")); };
+applyParams();
+window.engine?.onParams((v) => { Object.assign(params, v); applyParams(); });
+</script>
+    <!-- figma:head-start -->
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><!-- figma:title --></title>
+    <!-- figma:head-end -->
+  </head>
+  <body>
+    <!-- figma:body-start -->
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <!-- figma:body-end -->
+  </body>
+</html>
