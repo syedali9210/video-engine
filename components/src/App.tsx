@@ -96,6 +96,9 @@ const loadScene = (): Scene => {
   return { bg: s.bg ?? "", layers: (s.layers ?? []).filter((l) => byId(l.anim)) };
 };
 
+/** Importing a component writes its files into this app's library, on this machine: a build for the web leaves it out. */
+const IMPORT = import.meta.env.DEV;
+
 export default function App() {
   // #id in the URL picks the animation, so a link opens straight to it
   // the product open by default: the maze walk, light enough to run live beside everything else. The first load after
@@ -843,7 +846,7 @@ export default function App() {
         .map((a) => ({ id: `r-${a.id}`, group: "recent" as const, title: a.name, sub: a.category, picture: thumb(a.id), run: () => open(a.id) })),
       { id: "a-screen", group: "actions", title: "Build a screen", sub: "Several components on one device, measured together", icon: Stack, tone: "var(--k-component)", run: () => (setSpace("work"), openScreen()) },
       { id: "a-site", group: "actions", title: "Check a website", sub: "Any address on every device", icon: Globe, tone: "var(--k-scene)", run: () => (setSpace("work"), setMode("site")) },
-      { id: "a-import", group: "actions", title: "Import a component from code", icon: FileCode, tone: "var(--k-callout)", run: () => setImporting(true) },
+      ...(IMPORT ? [{ id: "a-import", group: "actions" as const, title: "Import a component from code", icon: FileCode, tone: "var(--k-callout)", run: () => setImporting(true) }] : []),
       { id: "a-theme", group: "actions", title: dark ? "Light theme" : "Dark theme", icon: dark ? Sun : Moon, kbd: "T", run: flipTheme },
       { id: "a-tips", group: "actions", title: tips ? "Hide tips" : "Show tips", icon: Question, run: () => setTips(!tips) },
       { id: "a-keys", group: "actions", title: "Keyboard shortcuts", icon: Keyboard, kbd: "?", run: () => setHelp(true) },
@@ -1003,10 +1006,14 @@ export default function App() {
         setMode("site");
         setLibOpen(false);
       }}
-      onImport={() => {
-        setLibOpen(false);
-        setImporting(true);
-      }}
+      onImport={
+        IMPORT
+          ? () => {
+              setLibOpen(false);
+              setImporting(true);
+            }
+          : undefined
+      }
       onPick={openAnim}
       onAdd={(x) => {
         addLayer(x);
@@ -1129,9 +1136,11 @@ export default function App() {
       <MenuItem icon={Globe} tone="var(--k-scene)" hint="Any web address on every device, each at its own size." onSelect={() => (edit(), setMode("site"))}>
         A website check
       </MenuItem>
-      <MenuItem icon={FileCode} hint="Bring a component in from its code." onSelect={() => setImporting(true)}>
-        A component, from code
-      </MenuItem>
+      {IMPORT && (
+        <MenuItem icon={FileCode} hint="Bring a component in from its code." onSelect={() => setImporting(true)}>
+          A component, from code
+        </MenuItem>
+      )}
     </div>
   );
   // you: the avatar's menu (the theme, tips, shortcuts)
@@ -1187,7 +1196,7 @@ export default function App() {
   if (rail && space === "library")
     return withRail(
       <>
-        <LibraryPage dark={dark} current={anim.id} onOpen={(aid) => (openAnim(aid), edit())} onImport={() => setImporting(true)} onScreen={() => (edit(), openScreen())} />
+        <LibraryPage dark={dark} current={anim.id} onOpen={(aid) => (openAnim(aid), edit())} onImport={IMPORT ? () => setImporting(true) : undefined} onScreen={() => (edit(), openScreen())} />
         {overlays}
       </>,
     );

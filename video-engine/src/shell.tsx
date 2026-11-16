@@ -29,10 +29,10 @@ export type Space = "home" | "product" | "films" | "creatives" | "lab"
 /** The places, named for what's in them. */
 export const SPACES: { id: Space; name: string; icon: Icon }[] = [
   { id: "home", name: "Home", icon: House },
-  { id: "product", name: "Product", icon: Package },
+  // your product's kit and the Lab live on the engine's server, with your files and keys: a build for the web leaves them out
+  ...(import.meta.env.DEV ? [{ id: "product" as const, name: "Product", icon: Package }] : []),
   { id: "films", name: "Films", icon: FilmStrip },
   { id: "creatives", name: "Creatives", icon: FrameCorners },
-  // the Lab runs on the dev server, with your keys: a build for the web leaves it out
   ...(import.meta.env.DEV ? [{ id: "lab" as const, name: "Lab", icon: Flask }] : []),
 ]
 

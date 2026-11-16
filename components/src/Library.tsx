@@ -50,7 +50,8 @@ export default function Library({
   /** open the Canvas: an interactive design for a site */
   onCanvas?: () => void;
   /** turn a dropped code file into a library animation */
-  onImport: () => void;
+  /** only where the engine's server runs */
+  onImport?: () => void;
   /** start dragging an animation out towards a screen (mouse and pen; touch adds with the + button) */
   onDrag?: (id: string, x: number, y: number) => void;
   dark: boolean;
@@ -92,9 +93,11 @@ export default function Library({
               <MenuItem icon={Globe} hint="A web address on every device, each at its own size." onSelect={onSite}>
                 Website check
               </MenuItem>
-              <MenuItem icon={FileCode} hint="Bring a component in from its code." onSelect={onImport}>
-                Import from code
-              </MenuItem>
+              {onImport && (
+                <MenuItem icon={FileCode} hint="Bring a component in from its code." onSelect={onImport}>
+                  Import from code
+                </MenuItem>
+              )}
               {onCanvas && (
                 <MenuItem icon={FrameCorners} hint="Design an interactive piece for a site." onSelect={onCanvas}>
                   Canvas
@@ -166,7 +169,7 @@ export default function Library({
             Canvas
           </button>
         )}
-        {bare && (
+        {bare && onImport && (
           <button type="button" onClick={onImport} className="press flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-body text-fg-2 hover:bg-surface-2 hover:text-fg">
             <FileCode size={16} aria-hidden className="shrink-0" />
             Import from code

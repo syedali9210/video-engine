@@ -115,7 +115,8 @@ function Composer(p: Props) {
     ["Direct a film", PaintBrush, p.onArtist],
     ["Start from a template", FilmSlate, p.onTemplates],
     ["Make a creative", FrameCorners, () => p.onCreative()],
-    ["Replicate a film", Copy, () => p.onLab("replicate")],
+    // replicating runs in the Lab: only on this machine
+    ...(p.labOn ? ([["Replicate a film", Copy, () => p.onLab("replicate")]] as [string, typeof PaintBrush, () => void][]) : []),
   ]
   return (
     <div className="tile rise-in mt-7 !overflow-visible focus-within:[--tile-sh:0_0_0_1px_var(--fg-3),0_8px_20px_-8px_rgb(0_0_0/0.12)]" style={{ animationDelay: "40ms" }}>

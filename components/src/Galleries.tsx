@@ -55,7 +55,7 @@ export function Act({ ink, icon: I, children, onClick }: { ink?: boolean; icon?:
 
 /* ---------------- Library: every animation, by category ---------------- */
 
-export function LibraryPage(p: { dark: boolean; current: string; onOpen: (id: string) => void; onImport: () => void; onScreen: () => void }) {
+export function LibraryPage(p: { dark: boolean; current: string; onOpen: (id: string) => void; /** bring a component in from its code (only where the engine's server runs) */ onImport?: () => void; onScreen: () => void }) {
   const [cat, setCat] = useState<"all" | Category>("all")
   const [q, setQ] = useState("")
   const match = (a: (typeof ANIMS)[number]) => !q || `${a.name} ${a.category} ${a.blurb ?? ""}`.toLowerCase().includes(q.toLowerCase())
@@ -82,9 +82,11 @@ export function LibraryPage(p: { dark: boolean; current: string; onOpen: (id: st
             <Act icon={Stack} onClick={p.onScreen}>
               Build a screen
             </Act>
-            <Act ink icon={FileCode} onClick={p.onImport}>
-              Import from code
-            </Act>
+            {p.onImport && (
+              <Act ink icon={FileCode} onClick={p.onImport}>
+                Import from code
+              </Act>
+            )}
           </>
         }
       />
@@ -118,9 +120,11 @@ export function LibraryPage(p: { dark: boolean; current: string; onOpen: (id: st
             action={
               <>
                 <Act onClick={() => setQ("")}>Clear the search</Act>
-                <Act ink icon={FileCode} onClick={p.onImport}>
-                  Import from code
-                </Act>
+                {p.onImport && (
+                  <Act ink icon={FileCode} onClick={p.onImport}>
+                    Import from code
+                  </Act>
+                )}
               </>
             }
             className="py-20"
