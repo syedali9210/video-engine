@@ -1,0 +1,13 @@
+# never uploaded to Vercel: installs, builds, your keys and local data, local notes, a commercial font
+node_modules
+dist
+.vite
+.env
+*.local
+.env*
+.engine-data
+engine-exports
+exports
+PROJECT-CONTEXT.md
+ROADMAP.md
+public/anim/swiggy-home/fonts/Gilroy-*
