@@ -173,7 +173,10 @@ export async function devtools(chrome: string, profile: string) {
     // Chrome can quit without answering, and a close that never settles would hold the render queue forever
     await Promise.race([send("Browser.close").catch(() => {}), sleep(2000)])
     ws.close()
-    proc.kill()
+    // on Windows kill() ends only the parent: its GPU, renderer and utility children live on and pile up (20 after
+    // one afternoon of renders), so the whole tree goes
+    if (process.platform === "win32" && proc.pid && proc.exitCode === null) spawnSync("taskkill", ["/PID", String(proc.pid), "/T", "/F"], { stdio: "ignore" })
+    else proc.kill()
   }
   return { send, evaluate, close, errors, proc, frames, on }
 }

@@ -22,6 +22,7 @@ export default {
     size: "1x1",
     end: 8.3,
     look: "paper",
+    tone: { ground: "#f5f4f0", ink: "#141414", accent: "#8ea8f0" },
     shots: [
       { name: "Your app", at: 0, role: ["intro", "product"], energy: 1, enter: "cut", exit: "push-in" },
       { name: "Introducing", at: 1.75, role: ["intro"], energy: 2, enter: "push-in", exit: "cut" },

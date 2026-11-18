@@ -23,6 +23,7 @@ export default {
     size: "9x16",
     end: 29.1,
     look: "night",
+    tone: { ground: "#07060a", ink: "#ffffff", accent: "#f05a1c" },
     shots: [
       { name: "Opening", at: 0, role: ["hook", "intro"], energy: 1, enter: "cut", exit: "push-in" },
       { name: "The prompt", at: 3.02, role: ["product", "feature"], energy: 2, enter: "push-in", exit: "cut" },

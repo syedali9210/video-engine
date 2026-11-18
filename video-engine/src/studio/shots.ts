@@ -21,7 +21,8 @@ export type ShotTag = { name: string; at: number; role: FilmRole[]; energy: 1 | 
 /** `chrome`: the film's own interface words (a menu, an agent's log, a tool's settings), drawn whatever the product, so
     the template probe doesn't take them for the reference's. `fit`: how much longer than the template's own words a
     line may run (1.25 unless the probe found a longer one cut off). */
-export type FilmSpec = { size: "16x9" | "1x1" | "9x16"; end: number; look: LookFamily; shots: ShotTag[]; chrome?: string[]; fit?: Record<string, number> }
+/** `tone`: its own ground, ink and accent, so it can be drawn in a product's (animations/_film/tone.ts) */
+export type FilmSpec = { size: "16x9" | "1x1" | "9x16"; end: number; look: LookFamily; shots: ShotTag[]; chrome?: string[]; fit?: Record<string, number>; tone?: { ground: string; ink: string; accent?: string } }
 /** what it reads of a library item (registry.ts AnimMeta) */
 type Meta = { id: string; name?: string; film?: FilmSpec; params?: Record<string, unknown>; schema?: Record<string, { type: string; label: string; hint?: string }> }
 

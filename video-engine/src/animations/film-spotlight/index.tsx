@@ -6,7 +6,7 @@
 // into the app icon (7.2), clicked (8.12), which opens the app: the start again.
 // The home screen, the three pages, the mark and the icon can be the user's own (screen slots).
 import type { CSSProperties, ReactNode } from "react";
-import { Baked, Cursor, Slot, Stage, at, expo, fill, glide, hexMix, inOut, lerp, measure, move, out, seg, useClock, useFonts } from "../_film/kit";
+import { Baked, Cursor, Slot, Stage, at, expo, fill, glide, hexMix, inOut, lerp, measure, move, out, readSlot, seg, useClock, useFonts } from "../_film/kit";
 import { params as defaults } from "./params";
 
 type P = typeof defaults;
@@ -222,6 +222,7 @@ function Editor({ p, t, a, page }: { p: P; t: number; a: string; page: number })
       <Device />
     </Slot>,
   ];
+  const mine = [p.dashboard, p.screen1, p.screen2, p.screen3][page] ?? "";
   return (
     <div style={{ position: "relative", width: 1500, height: 700, borderRadius: 14, background: "#fff", overflow: "hidden", boxShadow: "0 30px 80px -30px rgba(0,0,0,.18), 0 0 0 1px #e6e5e0", fontFamily: SANS, color: "#333" }}>
       <div style={{ ...at(0, 0), width: 1500, height: 46, background: "#f7f7f5", borderBottom: "1px solid #ecebe7" }}>
@@ -235,6 +236,13 @@ function Editor({ p, t, a, page }: { p: P; t: number; a: string; page: number })
           </div>
         ))}
       </div>
+      {/* the product's own screen for this page, filling the window from its top: no drawn editor around it */}
+      {mine ? (
+        <div style={at(0, 46, { width: 1500, height: 654, overflow: "hidden" })}>
+          <Slot src={mine} t={t} w={1500} h={654} style={readSlot(mine).focus ? undefined : { objectPosition: "50% 0%" }} />
+        </div>
+      ) : (
+      <>
       <div style={{ ...at(0, 46), width: 240, height: 654, background: "#f7f7f5", borderRight: "1px solid #ecebe7", fontSize: 13 }}>
         <div style={at(18, 18, { display: "flex", alignItems: "center", gap: 8, fontWeight: 500 })}>
           <span style={{ width: 14, height: 14, borderRadius: 3, background: "#222" }} /> {p.name}
@@ -262,6 +270,8 @@ function Editor({ p, t, a, page }: { p: P; t: number; a: string; page: number })
       <div style={at(365, 88)}>
         <div style={{ width: 900, height: 600, borderRadius: 8, overflow: "hidden", zoom: 0.46 }}>{canvas[page]}</div>
       </div>
+      </>
+      )}
     </div>
   );
 }
@@ -446,18 +456,23 @@ function Feature({ t, p, a }: { t: number; p: P; a: string }) {
   );
 }
 
-/** the people working at once: the avatars, then each agent */
-function Faces({ step }: { step: number }) {
-  const blue = "radial-gradient(circle at 30% 30%, #2563eb, #3b82f6 40%, #22d3ee 75%, #34d399)";
-  const sets: ReactNode[][] = [
-    [null, <span key="o" style={{ ...face, background: "radial-gradient(circle at 40% 30%, #fbbf24, #f59e0b 60%, #f97316)" }} />, <span key="m" style={{ ...face, background: "radial-gradient(circle at 50% 80%, #e11d48, #be185d 45%, #1a0a0f)" }} />],
-    [null, <span key="c" style={{ ...face, background: "#d97757", color: "#fff", fontSize: 70 }}>✳</span>],
-    [null, <span key="t" style={{ ...face, background: "radial-gradient(circle at 50% 45%, #b9b2f7, #e4e1fb 70%)", color: "#4f46e5", fontSize: 30, fontWeight: 600, fontFamily: '"Geist Mono", monospace' }}>{">_"}</span>],
-    [null, <span key="a" style={{ ...face, background: "#111", color: "#fff", fontSize: 40 }}>◈</span>],
-  ];
+/** what's at work with each word: the product's mark, then its screens (round, cropped to where to look), one a word.
+    Without screens, discs in shades of the accent (never another company's mark). */
+function Faces({ step, p, a }: { step: number; p: P; a: string }) {
+  const disc = (k: number) => `radial-gradient(circle at 35% 30%, ${hexMix(a, "#ffffff", 0.35 - k * 0.1)}, ${a} 55%, ${hexMix(a, "#000000", 0.25 + k * 0.08)})`;
+  const round = (src: string, k: number) =>
+    src ? (
+      <span key={`s${k}`} style={{ ...face, overflow: "hidden", background: "#fff" }}>
+        <Slot src={src} w={110} h={110} />
+      </span>
+    ) : (
+      <span key={`d${k}`} style={{ ...face, background: disc(k) }} />
+    );
+  const screens = [p.dashboard, p.screen1, p.screen2, p.screen3];
+  const sets: ReactNode[][] = [[null, round(screens[0], 0), round(screens[1], 1)], [null, round(screens[1], 1)], [null, round(screens[2], 2)], [null, round(screens[3], 3)]];
   return (
     <div style={{ display: "inline-flex", padding: 8, borderRadius: 99, background: "#fff", boxShadow: "0 2px 4px rgba(0,0,0,.05), 0 14px 30px -12px rgba(0,0,0,.18)" }}>
-      <span style={{ ...face, background: blue }} />
+      <span style={{ ...face, overflow: "hidden", background: p.mark ? "#fff" : disc(0) }}>{p.mark && <Slot src={p.mark} w={110} h={110} fit="contain" />}</span>
       {sets[Math.min(3, step)].slice(1).map((f, i) => (
         <span key={i} style={{ marginLeft: -24, borderRadius: 99, boxShadow: "0 0 0 6px #fff", display: "grid" }}>
           {f}
@@ -472,17 +487,34 @@ function Together({ t, p, a }: { t: number; p: P; a: string }) {
   const words = split(p.words);
   const i = Math.max(0, CUTS.findLastIndex((c) => t >= c));
   const next = CUTS[i + 1] ?? T.ghost + 0.3;
-  // the app slides in under the words and keeps going, a page per word
-  const [wx, wy] = glide(t, [
-    [3.45, 1080, 600],
-    [3.6, 570, 553],
-    [3.7, 262, 540],
-    [3.9, 154, 540],
-    [4.5, -244, 540],
-    [5.0, -460, 540],
-    [T.ghost, -654, 540],
-    [5.75, -760, 540],
-  ]);
+  // the app slides in under the words and keeps going, a page per word. The drawn editor is shot close (2×, its
+  // corner); the product's own screens are shown whole (0.8×) and drift by, so each reads and none is blown up
+  const own = !!(p.dashboard || p.screen1 || p.screen2 || p.screen3);
+  const zoom = own ? 0.8 : 2;
+  const [wx, wy] = glide(
+    t,
+    own
+      ? [
+          [3.45, 1080, 560],
+          [3.6, 380, 530],
+          [3.7, 60, 520],
+          [3.9, -10, 520],
+          [4.5, -60, 520],
+          [5.0, -100, 520],
+          [T.ghost, -140, 520],
+          [5.75, -170, 520],
+        ]
+      : [
+          [3.45, 1080, 600],
+          [3.6, 570, 553],
+          [3.7, 262, 540],
+          [3.9, 154, 540],
+          [4.5, -244, 540],
+          [5.0, -460, 540],
+          [T.ghost, -654, 540],
+          [5.75, -760, 540],
+        ],
+  );
   const [fx] = glide(t, [
     [3.45, 1180],
     [3.6, 767],
@@ -498,9 +530,9 @@ function Together({ t, p, a }: { t: number; p: P; a: string }) {
         {t >= T.words && <Typed key={i} text={words[i] ?? ""} t={t} at={CUTS[i]} ink={0.12} />}
       </div>
       <div style={at(0, 400 - 63, { width: S, display: "flex", justifyContent: "center", transform: `translateX(${fx - 540}px)`, opacity: dim > 0 ? 1 - dim * 0.5 : 1 })}>
-        <Faces step={i} />
+        <Faces step={i} p={p} a={a} />
       </div>
-      <div style={move(wx, wy, { transformOrigin: "0 0", willChange: "transform" }, " scale(2)")}>
+      <div style={move(wx, wy, { transformOrigin: "0 0", willChange: "transform" }, ` scale(${zoom})`)}>
         <Editor p={p} t={t} a={a} page={t < T.words ? 0 : i} />
       </div>
     </div>

@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { byId, withDefaults, type Values } from "./registry";
 import "./stage.css";
+import { toneMap, tones, type Theme, type Tone } from "./animations/_film/tone";
 
 declare global {
   interface Window {
@@ -30,7 +31,10 @@ function Stage() {
   const a = anim!;
   const [p, setP] = useState(() => withDefaults(a, window.engine?.params ?? undefined));
   useEffect(() => window.engine?.onParams((v) => setP(withDefaults(a, v))), [a]);
-  const Comp = useMemo(() => lazy(a.load!), [a]);
+  // a film in a product's colours: its palette comes with its code, the theme with its values (values.theme)
+  const [tones, setTones] = useState<string[] | null>(a.film ? null : []);
+  const Comp = useMemo(() => lazy(() => a.load!().then((m) => (setTones((m as { __tones?: string[] }).__tones ?? []), m))), [a]);
+  if (a.film && tones) applyTheme(themeOf(p.theme), tones, a.film.tone ?? undefined);
   // params flagged `reload` are read once at setup, so changing one remounts the animation
   const key = Object.keys(a.schema).filter((k) => a.schema[k].reload).map((k) => String(p[k])).join("|");
   return (
@@ -39,6 +43,32 @@ function Stage() {
     </Suspense>
   );
 }
+
+let said = ""
+/** The product's theme on this frame (or none: the template's own). */
+function applyTheme(theme: Theme | null, palette: string[], from?: Tone) {
+  const key = JSON.stringify([theme, palette.length, from])
+  if (key === said || typeof document === "undefined") return
+  said = key
+  const root = document.documentElement.style
+  for (const k of Object.keys(tones)) (root.removeProperty(`--t-${k}`), delete tones[k])
+  if (!theme || !from) return
+  Object.assign(tones, toneMap(palette, from, theme))
+  if (theme.sans) tones.sans = `"${theme.sans}"`
+  if (theme.display || theme.sans) tones.display = `"${theme.display || theme.sans}"`
+  for (const [k, v] of Object.entries(tones)) root.setProperty(`--t-${k}`, v)
+  for (const href of theme.fonts ?? [])
+    if (/^https:\/\/fonts\.googleapis\.com\//.test(href) && ![...document.querySelectorAll<HTMLLinkElement>("link[rel=stylesheet]")].some((l) => l.href === href))
+      document.head.appendChild(Object.assign(document.createElement("link"), { rel: "stylesheet", href }))
+}
+
+const themeOf = (v: unknown): Theme | null => {
+  try {
+    return typeof v === "string" && v ? (JSON.parse(v) as Theme) : null;
+  } catch {
+    return null;
+  }
+};
 
 const root = document.getElementById("root")!;
 root.className = anim?.layout === "fill" ? "fill" : "center";

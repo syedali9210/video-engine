@@ -659,8 +659,8 @@ function Chrome({ dark, b }: { dark: boolean; b: number }) {
     <>
       <div style={abs(0, 0, { width: SW, height: 26, background: dark ? "rgba(20,16,22,.55)" : "rgba(240,236,240,.82)", display: "flex", alignItems: "center", gap: 22, paddingLeft: 22, fontFamily: SANS, fontSize: 13, fontWeight: 600, color: dark ? "#ddd" : "#222" })}>
         <span></span>
-        {["Safari", "File", "Edit", "View", "History"].map((s) => (
-          <span key={s} style={{ fontWeight: s === "Safari" ? 700 : 500 }}>
+        {["File", "Edit", "View", "History", "Window"].map((s) => (
+          <span key={s} style={{ fontWeight: s === "File" ? 700 : 500 }}>
             {s}
           </span>
         ))}

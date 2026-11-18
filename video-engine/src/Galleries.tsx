@@ -37,7 +37,7 @@ export function Card({ onClick, shot, title, meta, badge, i = 0 }: { onClick: ()
   )
 }
 
-const Grid = ({ children, cols = 4 }: { children: ReactNode; cols?: 3 | 4 }) => <ul className={`grid grid-cols-2 gap-x-6 gap-y-9 ${cols === 3 ? "lg:grid-cols-3" : "md:grid-cols-3 xl:grid-cols-4"}`}>{children}</ul>
+export const Grid = ({ children, cols = 4 }: { children: ReactNode; cols?: 3 | 4 }) => <ul className={`grid grid-cols-2 gap-x-6 gap-y-9 ${cols === 3 ? "lg:grid-cols-3" : "md:grid-cols-3 xl:grid-cols-4"}`}>{children}</ul>
 
 /** A small label on a card's picture: what's open now. */
 export const Tag = ({ children }: { children: ReactNode }) => <span className="rounded-full bg-black/55 px-2.5 py-1 text-caption font-medium text-white backdrop-blur-md">{children}</span>

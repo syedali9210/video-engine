@@ -2,7 +2,7 @@
 // 3.0, typing 3.0, outline 4.3, ungroup 4.9, icon 5.45, star 6.0, sun 6.5, the app 7.0, the whip 9.0, the pen 9.2 s),
 // its paper, black, red and yellow are the reference's; the verbs, the line, the glyph and the tool are params.
 import type { CSSProperties, ReactNode } from "react";
-import { Caret, Stage, at, back, blink, clamp, expo, fill, inOut, lerp, measure, out, rng, seg, useClock, useFonts } from "../_film/kit";
+import { Caret, Slot, Stage, at, back, blink, clamp, expo, fill, inOut, lerp, measure, out, rng, seg, useClock, useFonts } from "../_film/kit";
 import { params as defaults } from "./params";
 
 type P = typeof defaults;
@@ -188,7 +188,7 @@ function Thumb({ kind, a }: { kind: string; a: string }) {
   };
   return <div style={{ width: 120, height: 120, borderRadius: 6, background: "#f5f4f0", display: "grid", placeItems: "center" }}>{inner[kind]}</div>;
 }
-function AppWindow({ a }: { a: string }) {
+function AppWindow({ a, src }: { a: string; src?: string }) {
   return (
     <div style={{ width: 1240, height: 780, borderRadius: 16, background: "#1c1c1e", boxShadow: "0 40px 100px -30px rgba(0,0,0,.5)", overflow: "hidden", position: "relative", fontFamily: SANS }}>
       <div style={at(0, 0, { width: 1240, height: 40, background: "#232325", display: "flex", gap: 8, alignItems: "center", paddingLeft: 16 })}>
@@ -196,6 +196,13 @@ function AppWindow({ a }: { a: string }) {
           <span key={c} style={{ width: 12, height: 12, borderRadius: 9, background: c }} />
         ))}
       </div>
+      {/* the product's own window, when there's one: no drawn editor around it */}
+      {src ? (
+        <div data-pick="screen" style={at(0, 40, { width: 1240, height: 740, overflow: "hidden" })}>
+          <Slot src={src} w={1240} h={740} />
+        </div>
+      ) : (
+      <>
       <div style={at(0, 40, { width: 56, height: 740, background: "#202022" })}>
         {Array.from({ length: 12 }, (_, i) => (
           <div key={i} style={at(18, 18 + i * 42, { width: 20, height: 20, borderRadius: 5, border: "2px solid #6c6c70" })} />
@@ -213,6 +220,8 @@ function AppWindow({ a }: { a: string }) {
           </div>
         ))}
       </div>
+      </>
+      )}
     </div>
   );
 }
@@ -224,7 +233,7 @@ function Meet({ t, p, a }: { t: number; p: P; a: string }) {
     <div style={{ ...fill, background: PAPER, overflow: "hidden", perspective: 1800 }}>
       <div style={{ ...fill, perspective: 1800, perspectiveOrigin: "700px 520px", transformOrigin: "800px 520px", transform: `scale(${lerp(1, 2.6, whip)})`, filter: whip > 0 ? `blur(${whip * 10}px)` : undefined }}>
         <div style={at(lerp(60, 90, k), lerp(240, 160, k), { transform: `rotateY(${lerp(18, 7, k)}deg) rotateX(3deg) scale(${lerp(0.92, 1, k)})`, opacity: k, transformOrigin: "0 50%" })}>
-          <AppWindow a={a} />
+          <AppWindow a={a} src={p.screen} />
         </div>
       </div>
       <div style={at(1450, 470, { fontFamily: SANS, fontSize: 66, fontWeight: 500, lineHeight: 1.12, color: INK, opacity: 1 - whip })}>

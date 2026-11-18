@@ -288,15 +288,8 @@ function Terminal({ lt, p }: { lt: number; p: P }) {
           ].map(([x, y], i) => (
             <g key={i}>
               <rect x={x - 90} y={y - 26} width="180" height="52" fill="rgba(0,0,0,.6)" stroke="rgba(255,255,255,.3)" />
-              <text x={x - 78} y={y - 2} fill="#3ad07a" fontFamily="Geist Mono, monospace" fontSize="15">
-                GOOD
-              </text>
-              <text x={x - 78} y={y + 16} fill="#3ad07a" fontFamily="Geist Mono, monospace" fontSize="15">
-                TRADE
-              </text>
-              <text x={x - 20} y={y - 2} fill="#e9e9e9" fontFamily="Geist Mono, monospace" fontSize="14">
-                +0.7 SOL
-              </text>
+              <circle cx={x - 62} cy={y} r="7" fill="#3ad07a" />
+              <rect x={x - 42} y={y - 5} width="110" height="10" rx="5" fill="rgba(233,233,233,.55)" />
             </g>
           ))}
         </svg>

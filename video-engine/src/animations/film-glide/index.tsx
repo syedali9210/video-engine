@@ -234,6 +234,9 @@ const GROW = [
 const BTN = { x: 1089, y: 22, w: 86, h: 48 };
 function PlayButton({ a, state }: { a: string; state: 0 | 1 | 2 }) {
   const lit = state > 0;
+  // the icon on the lit button: white, unless the accent is light itself (a black-and-white brand's is its ink)
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt((/^#[0-9a-f]{6}$/i.test(a) ? a : "#3d8bff").slice(i, i + 2), 16));
+  const icon = lit && 0.2126 * r + 0.7152 * g + 0.0722 * b > 170 ? "#0b0b0c" : "#fff";
   return (
     <div
       style={at(40, 40, {
@@ -248,12 +251,12 @@ function PlayButton({ a, state }: { a: string; state: 0 | 1 | 2 }) {
     >
       {state === 2 ? (
         <svg width="28" height="28" viewBox="0 0 24 24">
-          <rect x="6" y="5" width="4" height="14" rx="1" fill="#fff" />
-          <rect x="14" y="5" width="4" height="14" rx="1" fill="#fff" />
+          <rect x="6" y="5" width="4" height="14" rx="1" fill={icon} />
+          <rect x="14" y="5" width="4" height="14" rx="1" fill={icon} />
         </svg>
       ) : (
         <svg width="28" height="28" viewBox="0 0 24 24">
-          <path d="M7 4v16l13-8z" fill="#fff" />
+          <path d="M7 4v16l13-8z" fill={icon} />
         </svg>
       )}
     </div>
@@ -337,10 +340,11 @@ export default function MacroGlide({ p: given }: { p?: Partial<P> }) {
               </div>
             );
           })}
-        {!own && (
+        {/* the time and the playhead are the drawn editor's; the play button stays over your own screen too (the
+            camera's last shot is on it, lit and pressed) */}
+        {!own && <div style={place(X0 + 6, 18, { fontFamily: MONO, fontSize: 46, fontWeight: 700, color: "#f2f3f6", letterSpacing: "0.02em" })}>{clock(head(t))}</div>}
+        {(
           <>
-            {/* the time, the play button, the playhead: what changes on the panel */}
-            <div style={place(X0 + 6, 18, { fontFamily: MONO, fontSize: 46, fontWeight: 700, color: "#f2f3f6", letterSpacing: "0.02em" })}>{clock(head(t))}</div>
             {([0, 1, 2] as const).map((st) => {
               const o = st === 0 ? 1 - btnLit : st === 1 ? btnLit * (paused ? 0 : 1) : paused ? 1 : 0;
               return (
@@ -356,7 +360,7 @@ export default function MacroGlide({ p: given }: { p?: Partial<P> }) {
             <div style={place(BTN.x + BTN.w / 2, BTN.y + BTN.h / 2, { opacity: halo > 0 ? 0.9 * (1 - 0.35 * halo) : 0 })}>
               <div style={{ position: "absolute", left: 0, top: 0, transform: `translate(-50%, -50%) scale(${lerp(0.8, 1.05, out(halo))})`, width: 150, height: 88, borderRadius: 34, background: `radial-gradient(closest-side, ${alpha(hexMix(a, "#7fe3ff", 0.5), 0.0)} 55%, ${alpha(hexMix(a, "#7fe3ff", 0.5), 0.35)} 80%, ${alpha(hexMix(a, "#7fe3ff", 0.5), 0.0)})`, boxShadow: `inset 0 0 0 2px ${alpha(hexMix(a, "#7fe3ff", 0.4), 0.55)}` }} />
             </div>
-            {t >= T.head && (
+            {t >= T.head && !own && (
               <>
                 <div style={place(ph - 2, 126, { width: 4, height: PH - 140, background: "#ff4b3a", boxShadow: "0 0 12px rgba(255,75,58,.6)" })} />
                 <div style={place(ph - 24, 96, { width: 48, height: 40, background: "#ff4b3a", clipPath: "polygon(0 0,100% 0,100% 60%,50% 100%,0 60%)", borderRadius: 6 })} />

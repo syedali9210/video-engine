@@ -12,4 +12,8 @@ export const params = {
   photo2: "",
   photo3: "",
   photo4: "",
+  screen1: "",
+  screen2: "",
+  screen3: "",
+  screen4: "",
 };

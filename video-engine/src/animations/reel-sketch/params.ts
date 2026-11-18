@@ -9,4 +9,5 @@ export const params = {
   moods: "Listen|Feel|Discover|Dream|Replay|Play",
   poster: "the|Mood!",
   line: "Play the Mood.",
+  screen: "",
 };

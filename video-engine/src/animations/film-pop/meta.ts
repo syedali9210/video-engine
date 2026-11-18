@@ -23,6 +23,7 @@ export default {
     size: "16x9",
     end: 11.27,
     look: "pop",
+    tone: { ground: "#ffffff", ink: "#0e2a55", accent: "#0a8ff0" },
     shots: [
       { name: "Hook", at: 0, role: ["hook"], energy: 3, enter: "cut", exit: "cut" },
       { name: "Amount", at: 1.0, role: ["proof"], energy: 3, enter: "cut", exit: "flash" },
@@ -45,5 +46,9 @@ export default {
     photo2: { type: "screen", label: "Picture 2", group: "Pictures" },
     photo3: { type: "screen", label: "Picture 3", group: "Pictures" },
     photo4: { type: "screen", label: "Picture 4", group: "Pictures" },
+    screen1: { type: "screen", label: "Card 1", group: "Screens", hint: "Your screen in place of the budget card, top left (16:9)." },
+    screen2: { type: "screen", label: "Card 2", group: "Screens", hint: "In place of the installments card, top right (2:1)." },
+    screen3: { type: "screen", label: "Card 3", group: "Screens", hint: "In place of the split-the-bill card, bottom left (16:9)." },
+    screen4: { type: "screen", label: "Card 4", group: "Screens", hint: "In place of the spending card, bottom right (3:2)." },
   },
 } satisfies Omit<AnimMeta, "id">;

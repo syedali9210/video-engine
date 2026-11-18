@@ -2,7 +2,7 @@
 // on its own clock, cut where the reference cuts (measured: 4.17, 4.77, 6.37, 6.97, 8.2, 9.5, 10.43, 11.77, 12.47 s);
 // the light grey, white cards, one blue and the dark interludes are the reference's; the words are params.
 import type { CSSProperties, ReactNode } from "react";
-import { Caret, Cursor, Stage, alpha, at, blink, clamp, expo, fill, hexMix, lerp, out, seg, useClock, useFonts } from "../_film/kit";
+import { Caret, Cursor, Shown, Slot, Stage, alpha, at, blink, clamp, expo, fill, hexMix, lerp, out, seg, useClock, useFonts } from "../_film/kit";
 import { params as defaults } from "./params";
 
 type P = typeof defaults;
@@ -29,13 +29,18 @@ const CELLS: [number, Card][][] = [
 /* ---------------- the pieces ---------------- */
 
 /** the product's mark: an asterisk of six strokes */
-const Asterisk = ({ s, color = INK }: { s: number; color?: string }) => (
+const Asterisk = ({ s, color = INK, src }: { s: number; color?: string; src?: string }) =>
+  src ? (
+    <span style={{ display: "inline-block", verticalAlign: "middle", width: s, height: s }}>
+      <Slot src={src} w={s} h={s} fit="contain" />
+    </span>
+  ) : (
   <svg width={s} height={s} viewBox="-50 -50 100 100" style={{ display: "inline-block", verticalAlign: "middle" }}>
     {[0, 30, 60, 90, 120, 150].map((a) => (
       <line key={a} x1={Math.cos((a * Math.PI) / 180) * -44} y1={Math.sin((a * Math.PI) / 180) * -44} x2={Math.cos((a * Math.PI) / 180) * 44} y2={Math.sin((a * Math.PI) / 180) * 44} stroke={color} strokeWidth="13" strokeLinecap="round" />
     ))}
   </svg>
-);
+  );
 const Burst = ({ s }: { s: number }) => (
   <svg width={s} height={s} viewBox="-50 -50 100 100" style={{ display: "inline-block", verticalAlign: "middle" }}>
     {Array.from({ length: 10 }, (_, i) => {
@@ -51,8 +56,9 @@ const Pill = ({ children, dark = false, style }: { children: ReactNode; dark?: b
 const UI = ({ w, h, children, style }: { w: number; h: number; children?: ReactNode; style?: CSSProperties }) => <div style={{ position: "relative", width: w, height: h, borderRadius: 18, background: "#fff", boxShadow: "0 0 0 1px #e6e6e6, 0 20px 40px -24px rgba(0,0,0,.2)", overflow: "hidden", fontFamily: SANS, color: INK, ...style }}>{children}</div>;
 
 /** a screenshot of the page that was made: a soft gradient hero, two columns of features */
-function PageShot({ w, a }: { w: number; a: string }) {
+function PageShot({ w, a, src }: { w: number; a: string; src?: string }) {
   const k = w / 600;
+  if (src) return <Shown pick="page" src={src} w={w} aspect={600 / 420} style={{ background: "#fff", borderRadius: 10 * k, boxShadow: "0 0 0 1px #e6e6e6" }} />;
   return (
     <div style={{ width: w, height: 420 * k, background: "#fff", borderRadius: 10 * k, boxShadow: "0 0 0 1px #e6e6e6", overflow: "hidden", position: "relative", fontFamily: SANS }}>
       <div style={at(16 * k, 12 * k, { display: "flex", gap: 8 * k, alignItems: "center", fontSize: 11 * k, color: "#666" })}>
@@ -86,7 +92,7 @@ function CardView({ card, lt, p, a }: { card: Card; lt: number; p: P; a: string 
         <div style={{ ...fill, background: GREY, display: "grid", placeItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14, fontFamily: SANS, fontSize: 52, fontWeight: 600, letterSpacing: "-0.02em", color: INK }}>
             <span style={{ transform: `rotate(${lt * 40}deg)` }}>
-              <Asterisk s={48} />
+              <Asterisk s={48} src={p.mark} />
             </span>
             <span style={{ clipPath: `inset(0 ${(1 - word) * 100}% 0 0)` }}>{p.name}</span>
           </div>
@@ -125,7 +131,7 @@ function CardView({ card, lt, p, a }: { card: Card; lt: number; p: P; a: string 
       return (
         <div style={{ ...fill, background: "#fff" }}>
           <div style={at(0, 70, { width: W, textAlign: "center", fontFamily: SANS, fontSize: 30, color: "#333" })}>
-            <Asterisk s={26} /> <br />
+            <Asterisk s={26} src={p.mark} /> <br />
             {p.begin}
           </div>
           <div style={at(130, 190, { opacity: enter })}>
@@ -135,7 +141,7 @@ function CardView({ card, lt, p, a }: { card: Card; lt: number; p: P; a: string 
                 <Caret on={blink(lt, n < p.prompt.length)} />
               </div>
               <div style={at(30, 130, { display: "flex", alignItems: "center", gap: 14, fontSize: 20, color: "#666" })}>
-                + ⊞ ⚙ Super Computer <span style={{ padding: "2px 10px", borderRadius: 6, background: alpha(a, 0.15), color: a, fontSize: 16 }}>New</span>
+                + ⊞ ⚙ {p.name} <span style={{ padding: "2px 10px", borderRadius: 6, background: alpha(a, 0.15), color: a, fontSize: 16 }}>New</span>
               </div>
             </UI>
             <div style={{ marginTop: 16, fontFamily: SANS, fontSize: 20, color: "#555" }}>♛ Upgrade to PRO</div>
@@ -197,11 +203,11 @@ function CardView({ card, lt, p, a }: { card: Card; lt: number; p: P; a: string 
               <div style={{ width: "100%", height: "100%", borderRadius: 8, background: "#fff", overflow: "hidden", display: "grid", placeItems: "center" }}>
                 {card === "brand" ? (
                   <span style={{ display: "flex", alignItems: "center", gap: 12, fontFamily: SANS, fontSize: 48, fontWeight: 600, letterSpacing: "-0.02em" }}>
-                    <Asterisk s={44} /> {p.name}
+                    <Asterisk s={44} src={p.mark} /> {p.name}
                   </span>
                 ) : (
                   <div style={{ transform: `translateY(${-seg(lt, 0.8, 2.2) * 60}px)` }}>
-                    <PageShot w={572} a={a} />
+                    <PageShot w={572} a={a} src={p.page} />
                   </div>
                 )}
               </div>
@@ -276,7 +282,7 @@ function CardView({ card, lt, p, a }: { card: Card; lt: number; p: P; a: string 
       return (
         <div style={{ ...fill, background: GREY, display: "grid", placeItems: "center" }}>
           <div style={{ transform: `scale(${lerp(0.9, 1, enter)}) translateY(${-seg(lt, 0.5, 2.5) * 40}px)`, opacity: enter }}>
-            <PageShot w={760} a={a} />
+            <PageShot w={760} a={a} src={p.page} />
           </div>
         </div>
       );

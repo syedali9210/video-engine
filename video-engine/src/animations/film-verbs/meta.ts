@@ -22,6 +22,7 @@ export default {
     size: "16x9",
     end: 11.77,
     look: "paper",
+    tone: { ground: "#f3f2ee", ink: "#121212", accent: "#ea3d23" },
     chrome: ["Stroke", "Pathfinder", "Fill", "Text on path", "Bend", "Extrude", "Copies", "Threshold"],
     shots: [
       { name: "Verbs", at: 0, role: ["hook", "feature"], energy: 3, enter: "cut", exit: "cut" },
@@ -38,5 +39,6 @@ export default {
     line: { type: "text", label: "Beside it", group: "Story" },
     tool: { type: "text", label: "The tool shown", group: "Ending" },
     how: { type: "text", label: "How it works", group: "Ending" },
+    screen: { type: "screen", label: "Your app", group: "Screens", hint: "The window that's met, in place of the drawn editor (16:10)." },
   },
 } satisfies Omit<AnimMeta, "id">;

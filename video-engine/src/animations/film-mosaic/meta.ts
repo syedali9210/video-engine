@@ -22,6 +22,7 @@ export default {
     size: "16x9",
     end: 13,
     look: "night",
+    tone: { ground: "#efefef", ink: "#151515", accent: "#2d8cff" },
     chrome: ["Edited company.md", "Connect it in one click", "Home Product Pricing"],
     shots: [
       { name: "The prompt", at: 0, role: ["intro", "product"], energy: 2, enter: "cut", exit: "cut" },
@@ -42,5 +43,7 @@ export default {
     connect: { type: "text", label: "Connect", group: "Story" },
     team: { type: "text", label: "In the rings", group: "Story" },
     tools: { type: "text", label: "Integrations", group: "Story", hint: "Eight, split by |." },
+    page: { type: "screen", label: "The page that was made", group: "Screens", hint: "Your product's screen, in place of the drawn page (16:10)." },
+    mark: { type: "screen", label: "Logo", group: "Product", hint: "In place of the asterisk." },
   },
 } satisfies Omit<AnimMeta, "id">;

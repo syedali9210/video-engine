@@ -22,6 +22,7 @@ export default {
     size: "9x16",
     end: 17.4,
     look: "paper",
+    tone: { ground: "#101011", ink: "#ffffff", accent: "#1ed760" },
     fit: { query: 1, poster: 1 }, // cut off at a quarter longer (npm run templates)
     shots: [
       { name: "Sketch", at: 0, role: ["hook"], energy: 2, enter: "cut", exit: "cut" },
@@ -44,5 +45,6 @@ export default {
     poster: { type: "text", label: "Poster", group: "Story", hint: "Two parts split by |: a small italic word, then the huge one." },
     line: { type: "text", label: "End line", group: "Ending" },
     cta: { type: "text", label: "Call to action", group: "Ending", hint: "Under everything; *words* in coral." },
+    screen: { type: "screen", label: "Your app", group: "Screens", hint: "A phone screen: what the sketch becomes, in place of the drawn music app (9:16)." },
   },
 } satisfies Omit<AnimMeta, "id">;

@@ -8,7 +8,7 @@
 //
 //   claude mcp add animation-engine -- node "<engine folder>/mcp/server.mjs"
 //
-// Tools: make_video · make_interactive · job_status · list_templates · engine_status
+// Tools: make_video · make_film · edit_film · make_interactive · make_shader_video · list_shader_presets · job_status · list_templates · engine_status
 // Env:   ENGINE_URL (http://localhost:5180) · STUDIO_CHROME (Chrome or Edge; found by itself otherwise)
 import { spawn, spawnSync } from "node:child_process"
 import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs"
@@ -594,6 +594,192 @@ const TOOLS = [
       ]
         .filter(Boolean)
         .join("\n")
+    },
+  },
+  {
+    name: "make_shader_video",
+    title: "Make a shader video",
+    description:
+      "Renders a looping shader video and saves it: a moving gradient (ShaderGradient's look), a gradient laid on 3D shapes (stacked slabs, glass discs, pills, an orb, a ring, bento tiles), a logo or a word filled with liquid metal, or a React Three Fiber scene (showroom, prism, candy). Name a preset (list_shader_presets), or leave it out and the engine makes a new one by its rules (a checked palette for the mood or the brand colour, a framing and motion that work). Every video loops seamlessly. Returns the file's path.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        kind: { type: "string", enum: ["gradient", "shape", "liquid", "scene"], description: "gradient: folded colour in motion. shape: a gradient on 3D forms. liquid: a logo or word in liquid metal. scene: an R3F scene." },
+        preset: str("A preset's name (list_shader_presets). Without it a new one is made by the rules."),
+        mood: { type: "string", enum: ["any", "warm", "cool", "vivid", "pastel", "dark", "mono"], description: "For a new gradient or shape." },
+        brand: str("A brand colour (#rrggbb): a new palette is built from its hue."),
+        seed: { type: "number", description: "The same seed makes the same video." },
+        colors: { type: "array", items: { type: "string" }, description: "Colours to use instead (#rrggbb): 3 for a gradient, 2 to 5 for a shape's ramp." },
+        text: str("Liquid logo: a word or letters to fill (up to 14 characters)."),
+        logo: str("Liquid logo: a picture file to fill (a PNG or SVG with transparency is best)."),
+        seconds: { type: "number", description: "The file's length in seconds (it loops; one loop by default)." },
+        size: { type: "string", enum: ["16x9", "16x9-4k", "9x16", "1x1", "4x5"], description: "16x9 (1920 × 1080) by default." },
+        fps: { type: "number", enum: [24, 30, 60], description: "60 by default." },
+        transparent: { type: "boolean", description: "A clear ground: a ProRes 4444 .mov with alpha." },
+        out: str("Where to save it: a file or a folder. By default the engine's exports folder."),
+      },
+      required: ["kind"],
+    },
+    async run(a, { progress, signal }) {
+      const t0 = Date.now()
+      await ensureEngine(progress)
+      let logo
+      if (a.logo) {
+        const type = { ".png": "image/png", ".svg": "image/svg+xml", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" }[extname(a.logo).toLowerCase()]
+        if (!type) throw new Error("The logo has to be a PNG, SVG, JPEG or WebP.")
+        const r = await fetch(`${ENGINE}/__shader/logo`, { method: "POST", headers: { "content-type": type }, body: readFileSync(resolve(a.logo)) })
+        logo = (await r.json()).url
+        if (!logo) throw new Error("The engine didn't take the logo.")
+      }
+      const [width, height] = { "16x9": [1920, 1080], "16x9-4k": [3840, 2160], "9x16": [1080, 1920], "1x1": [1080, 1080], "4x5": [1080, 1350] }[a.size || "16x9"]
+      const fps = a.fps || 60
+      progress("Making the spec", 5)
+      const r = await fetch(`${ENGINE}/__shader/make`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind: a.kind, preset: a.preset, mood: a.mood, brand: a.brand, seed: a.seed, colors: a.colors, text: a.text, logo, transparent: a.transparent, width, height, fps, seconds: a.seconds }) })
+      const made = await r.json().catch(() => ({}))
+      if (!r.ok || !made.id) throw new Error(made.error || `The engine said ${r.status}.`)
+      let s
+      for (;;) {
+        if (signal?.aborted) throw new Error("Cancelled")
+        s = await (await fetch(`${ENGINE}/__shader/jobs/${made.id}`)).json()
+        if (s.state === "error") throw new Error(`The render failed: ${s.error || "no reason given"}`)
+        if (s.state === "done") break
+        progress(s.state === "queued" ? "Waiting for the renderer" : s.state === "encoding" ? "Encoding" : `Rendering frame ${s.frame} of ${s.total}`, s.total > 1 ? 10 + (85 * s.frame) / s.total : 10)
+        await sleep(1000)
+      }
+      const ext = s.url.split(".").pop()
+      const file = fresh(target(a.out, undefined, `${slug(made.spec.name)}.${ext}`).replace(/\.\w+$/, `.${ext}`))
+      mkdirSync(dirname(file), { recursive: true })
+      const got = await fetch(`${ENGINE}${s.url}`)
+      await pipeline(Readable.fromWeb(got.body), createWriteStream(file))
+      return `Saved: ${file}
+${made.spec.name} (${a.kind}${a.preset ? "" : ", made by the rules"}), ${width} × ${height}, ${fps} fps, a ${made.spec.duration} s loop, ${mb(file)} MB. Made in ${Math.round((Date.now() - t0) / 1000)} s.`
+    },
+  },
+  {
+    name: "list_shader_presets",
+    title: "List the shader presets",
+    description: "The presets make_shader_video can render, by kind (gradient, shape, liquid, scene), each with what it is.",
+    inputSchema: { type: "object", properties: {} },
+    async run() {
+      await ensureEngine()
+      const p = await (await fetch(`${ENGINE}/__shader/presets`)).json()
+      return Object.entries(p)
+        .map(([kind, xs]) => `${kind}: ${xs.join(", ")}`)
+        .join("\n")
+    },
+  },
+  {
+    name: "make_film",
+    title: "Make a product film from a template",
+    description:
+      "Makes a launch film of a product with one of the engine's film templates (picked for the product, or named) and saves it as an MP4. The engine writes the product's brief once (who it's for, the pain, the old way, the features and their benefits; real facts only), picks the template whose story fits (with its reasons), writes every line of it in one AI call using the template's story contract, fills its screens with the product's own, checks every line (fits, no leftover words from the reference film, no invented numbers or addresses), and renders it in the Studio. Reports what it cost in tokens and seconds. Give `project` (and `url` to film the running app's screens) or an existing product kit's id.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        project: str("Absolute path of the product's codebase (its README becomes the brief's material)."),
+        url: str("The app's address while it runs: its screens are captured and used in the film."),
+        paths: { type: "array", items: { type: "string" }, description: "Pages to capture under url (up to 4)." },
+        site: str("The product's public web address, if it has one (shown only if real)."),
+        kit: str("An existing product kit's id instead of project and url."),
+        template: str("A film template's id (spotlight, horizon, glide, blueprint, verbs, flyover, liquid, mosaic, quad, pop, sketch-reel, desk-reel), or \"auto\" (the default) to pick the one that fits."),
+        size: { type: "string", enum: ["16x9", "9x16", "1x1", "4x5"], description: "Reframed from the template's own shape when different." },
+        length: { type: "number", description: "About how long, in seconds (helps the pick)." },
+        draft: { type: "boolean", description: "A fast half-size render to look at (30 fps) instead of the final." },
+        critic: { type: "boolean", description: "Render a draft first, have its stills reviewed against the brief, and apply the fixes before the final (costs one vision call)." },
+        out: str("Where to save it: a file or a folder. By default the engine's exports folder."),
+      },
+    },
+    async run(a, { progress, signal }) {
+      const t0 = Date.now()
+      await ensureEngine(progress)
+      const post = async (path, body, type = "application/json") => {
+        const r = await fetch(`${ENGINE}${path}`, { method: "POST", headers: { "content-type": type }, body: type === "application/json" ? JSON.stringify(body) : body })
+        const j = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(j.error || `${path}: ${r.status}`)
+        return j
+      }
+      let kit = a.kit
+      if (!kit) {
+        if (!a.project && !a.url) throw new Error("Give the product's codebase (project), its running app (url), or a product kit (kit).")
+        const p = readProject(a.project)
+        const made = await post("/__kit/new", { name: p.name || "My product" })
+        kit = made.id
+        if (a.url) {
+          progress(`Capturing ${a.url}`, 8)
+          const b = await launch()
+          try {
+            let i = 0
+            for (const shot of await capture(b.tab, a.url, a.paths, { strip: true })) await post(`/__kit/upload?kit=${kit}&name=screen-${++i}.webp&w=1206&h=2460`, Buffer.from(shot, "base64"), "image/webp")
+          } finally {
+            b.close()
+          }
+        }
+        const readme = a.project ? ["README.md", "readme.md", "README"].map((f) => join(resolve(a.project), f)).find((f) => existsSync(f)) : null
+        const notes = [p.tagline, p.features?.length ? `Features: ${p.features.join("; ")}` : "", readme ? readFileSync(readme, "utf8").slice(0, 4000) : ""].filter(Boolean).join("\n\n")
+        const k = await (await fetch(`${ENGINE}/__kit/get?id=${kit}`)).json()
+        await post("/__kit/save", { kit: { ...k, notes, ...(a.site ? { url: a.site } : {}) } })
+      }
+      progress("Writing the brief, picking the template, writing its lines", 15)
+      let film = await post("/__film/make", { kit, template: a.template || "auto", size: a.size, length: a.length })
+      const renderAndWait = async (draft, from, to) => {
+        const { job } = await post("/__film/render", { id: film.id, draft })
+        const end = Date.now() + 25 * 60_000
+        for (;;) {
+          if (signal?.aborted) throw new Error("Cancelled")
+          const s = await (await fetch(`${ENGINE}/__studio/jobs/${job}`)).json()
+          if (s.state === "error") throw new Error(`The render failed: ${s.error || "no reason given"}`)
+          if (s.state === "done") return job
+          if (Date.now() > end) throw new Error(`Still rendering after 25 minutes: job ${job}.`)
+          progress(s.total > 1 ? `Rendering frame ${s.frame} of ${s.total}` : "Rendering", s.total > 1 ? from + ((to - from) * s.frame) / s.total : from)
+          await sleep(1500)
+        }
+      }
+      let review = ""
+      if (a.critic) {
+        await renderAndWait(true, 25, 45)
+        progress("The critic is looking at the draft", 47)
+        const c = await post("/__film/critic", { id: film.id })
+        film = c.film
+        review = c.say ? `\nThe critic: ${c.say}${c.ops?.length ? ` (${c.ops.length} line${c.ops.length === 1 ? "" : "s"} rewritten)` : ""}` : ""
+      }
+      const job = await renderAndWait(!!a.draft, a.critic ? 50 : 25, 95)
+      progress("Saving", 97)
+      const v = film.versions.at(-1)
+      const file = await save(job, target(a.out, a.project, `${slug(film.name)}${a.draft ? "-draft" : ""}.mp4`))
+      const tokens = film.log.reduce((n, s) => n + (s.tokens || 0), 0)
+      const pick = film.picks.find((p) => p.id === v.template)
+      const errors = v.problems.filter((p) => p.level === "error")
+      return [
+        `Saved: ${file} (${mb(file)} MB)`,
+        `Film ${film.id}: “${pick?.name ?? v.template}”${pick?.reasons?.length ? ` because it ${pick.reasons.join("; ")}` : ""}.`,
+        `Lines: ${Object.entries(v.values).filter(([, x]) => !/^(image|video|anim):|^#/.test(String(x))).map(([k, x]) => `${k} “${x}”`).join(" · ")}`,
+        errors.length ? `Problems left: ${errors.map((p) => p.text).join(" ")}` : "Every line checked.",
+        `Cost: ${tokens.toLocaleString()} tokens, made in ${Math.round((Date.now() - t0) / 1000)} s.${review}`,
+        `edit_film with {"id": "${film.id}", "note": "…"} changes it.`,
+      ].join("\n")
+    },
+  },
+  {
+    name: "edit_film",
+    title: "Change a film with a note",
+    description: "Changes a film made with make_film from a note in plain words (\"make the hook punchier\", \"shorter lines\", \"use the glide template\", \"9:16\"): the engine reads the note into edits (rewriting just the lines it's about, another template, another shape, scenes dropped or retimed), checks the lines again, and with `render` renders and saves it.",
+    inputSchema: {
+      type: "object",
+      properties: { id: str("The film's id (from make_film)."), note: str("What to change, in plain words."), render: { type: "boolean", description: "Render and save it after (default true)." }, draft: { type: "boolean" }, out: str("Where to save it.") },
+      required: ["id", "note"],
+    },
+    async run(a, { progress, signal }) {
+      await ensureEngine(progress)
+      const r = await fetch(`${ENGINE}/__film/edit`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: a.id, note: a.note }) })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || `The engine said ${r.status}.`)
+      const v = j.film.versions.at(-1)
+      const said = `${j.say || "Changed."} (${j.ops?.length ?? 0} edit${j.ops?.length === 1 ? "" : "s"}; ${v.problems.filter((p) => p.level === "error").length} problems)`
+      if (a.render === false) return said
+      const { job } = await (await fetch(`${ENGINE}/__film/render`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: a.id, draft: !!a.draft }) })).json()
+      if (!(await follow(job, progress, signal, 25 * 60_000))) return `${said}\nStill rendering: job ${job}.`
+      const file = await save(job, target(a.out, undefined, `${slug(j.film.name)}${a.draft ? "-draft" : ""}.mp4`))
+      return `${said}\nSaved: ${file} (${mb(file)} MB)`
     },
   },
   {

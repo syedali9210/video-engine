@@ -2,7 +2,7 @@
 // 1.5, 2.0, 3.23, 5.0, 5.37, 6.25, 6.8, 7.87, 8.3, 9.97 s), its blue, navy, yellow flash and white are the
 // reference's; the words, the amounts and the name are params, the pictures are the engine's.
 import type { CSSProperties, ReactNode } from "react";
-import { Cursor, Stage, alpha, at, back, clamp, expo, fill, hexMix, inOut, lerp, out, rng, seg, useClock, useFonts, useWebFonts } from "../_film/kit";
+import { Cursor, Slot, Stage, alpha, at, back, clamp, expo, fill, hexMix, inOut, lerp, out, rng, seg, useClock, useFonts, useWebFonts } from "../_film/kit";
 import { params as defaults } from "./params";
 
 type P = typeof defaults;
@@ -86,7 +86,9 @@ const Photo = ({ src, w, h, style, pick }: { src: string; w: number; h: number; 
   </div>
 );
 
-function Card({ x, y, w, h, children }: { x: number; y: number; w: number; h: number; children: ReactNode }) {
+/** a card of the app: the reference's drawn one, or the product's own screen filling it (`src`) */
+function Card({ x, y, w, h, src, pick, children }: { x: number; y: number; w: number; h: number; src?: string; pick?: string; children: ReactNode }) {
+  if (src) return <div data-pick={pick} style={at(x, y, { width: w, height: h, borderRadius: 30, overflow: "hidden", background: "#fff", boxShadow: "0 20px 40px -20px rgba(0,0,40,.35)" })}><Slot src={src} w={w} h={h} /></div>;
   return <div style={at(x, y, { width: w, height: h, borderRadius: 30, background: "#fff", padding: "28px 34px", boxSizing: "border-box", fontFamily: DISPLAY, color: NAVY, boxShadow: "0 20px 40px -20px rgba(0,0,40,.35)" })}>{children}</div>;
 }
 
@@ -259,7 +261,7 @@ export default function PopBlue({ p: given }: { p?: Partial<P> }) {
     shot = (
       <div style={{ ...fill, background: a, overflow: "hidden" }}>
         <div style={{ ...fill, transformOrigin: "960px 540px", transform: `scale(${z})`, filter: glitch > 0 ? `blur(${glitch * 3}px) saturate(${1 - glitch})` : undefined, opacity: 1 - glitch * 0.7 }}>
-          <Card x={300} y={130} w={620} h={340}>
+          <Card x={300} y={130} w={620} h={340} src={p.screen1} pick="screen1">
             <div style={{ fontSize: 56, fontWeight: 600 }}>Budget</div>
             <div style={{ display: "flex", alignItems: "center", gap: 40, marginTop: 20 }}>
               <span style={{ width: 70, height: 70, borderRadius: 99, background: "#e5e7eb", display: "grid", placeItems: "center", fontSize: 50 }}>−</span>
@@ -267,14 +269,14 @@ export default function PopBlue({ p: given }: { p?: Partial<P> }) {
               <span style={{ width: 70, height: 70, borderRadius: 99, background: "#ef2b3c", color: "#fff", display: "grid", placeItems: "center", fontSize: 50 }}>+</span>
             </div>
           </Card>
-          <Card x={1000} y={160} w={560} h={260}>
+          <Card x={1000} y={160} w={560} h={260} src={p.screen2} pick="screen2">
             <div style={{ fontSize: 30 }}>4 more installments</div>
             <div style={{ fontSize: 76, fontWeight: 600 }}>${n2}</div>
             <div style={{ height: 10, borderRadius: 5, background: "#e5e7eb", marginTop: 10, position: "relative" }}>
               <div style={{ width: `${30 + seg(t, T.cards, T.glitch) * 20}%`, height: 10, borderRadius: 5, background: "#ff6a1a" }} />
             </div>
           </Card>
-          <Card x={300} y={620} w={560} h={300}>
+          <Card x={300} y={620} w={560} h={300} src={p.screen3} pick="screen3">
             <div style={{ fontSize: 50, fontWeight: 600 }}>Split the bill</div>
             <div style={{ display: "flex", gap: 14, marginTop: 24 }}>
               {["rk", "ss", "cr"].map((s, i) => (
@@ -284,7 +286,7 @@ export default function PopBlue({ p: given }: { p?: Partial<P> }) {
               ))}
             </div>
           </Card>
-          <Card x={1000} y={580} w={560} h={380}>
+          <Card x={1000} y={580} w={560} h={380} src={p.screen4} pick="screen4">
             <div style={{ fontSize: 56, fontWeight: 600 }}>Eating</div>
             {[
               ["50", "#ffb21f", 100],

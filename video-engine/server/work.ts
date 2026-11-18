@@ -18,10 +18,10 @@ import { chat, loadEnv, saveEnv, type Msg, type Reply, type Via } from "./ai.ts"
 export type ProviderId = "gemini" | "groq" | "openrouter" | "cloudflare" | "ollama"
 /** `out`: the most a reply may be, in tokens (Gemini's thinking counts against it, so it gets room; the others refuse
     a request asking past their model's ceiling, 8,192 being safe for all) */
-type Provider = { id: ProviderId; name: string; env?: string; url: string; model?: string; keys?: { url: string; where: string }; models?: string[]; out: number }
+type Provider = { id: ProviderId; name: string; env?: string; url: string; model?: string; /** its other models, asked in turn when one is overloaded or can't take a request */ fallback?: string[]; keys?: { url: string; where: string }; models?: string[]; out: number }
 
 export const PROVIDERS: Provider[] = [
-  { id: "gemini", name: "Gemini", env: "WORK_GEMINI_API_KEY", url: "https://generativelanguage.googleapis.com/v1beta/openai", model: "gemini-3.8-flash", keys: { url: "https://aistudio.google.com/apikey", where: "Google AI Studio" }, out: 16000 },
+  { id: "gemini", name: "Gemini", env: "WORK_GEMINI_API_KEY", url: "https://generativelanguage.googleapis.com/v1beta/openai", model: "gemini-3.8-flash", fallback: ["gemini-3-flash-preview", "gemini-flash-lite-latest", "gemini-3.5-flash-lite", "gemini-3.7-flash", "gemini-flash-latest"], keys: { url: "https://aistudio.google.com/apikey", where: "Google AI Studio" }, out: 16000 },
   { id: "groq", name: "Groq", env: "GROQ_API_KEY", url: "https://api.groq.com/openai/v1", keys: { url: "https://console.groq.com/keys", where: "GroqCloud" }, out: 8192 },
   { id: "openrouter", name: "OpenRouter", env: "OPENROUTER_API_KEY", url: "https://openrouter.ai/api/v1", keys: { url: "https://openrouter.ai/keys", where: "OpenRouter" }, out: 8192 },
   // the address carries the account; this endpoint lists no models, so the ones Cloudflare documents for text
@@ -81,7 +81,7 @@ type Settings = { models: Partial<Record<ProviderId, string>>; account?: string;
 type Usage = { day: string; n: Partial<Record<ProviderId, number>>; tokens: Partial<Record<ProviderId, number>> }
 type Tried = { id: ProviderId; why: string }
 type Line = { at: string; job: Job; ok: boolean; provider?: ProviderId; model?: string; cached?: boolean; ms: number; tokens?: number; tried: Tried[]; error?: string }
-export type Answer = { text: string; provider: ProviderId; model: string; finish?: string; cached: boolean; tried: Tried[] }
+export type Answer = { text: string; provider: ProviderId; model: string; finish?: string; cached: boolean; tried: Tried[]; /** what it cost (0 from the cache) */ tokens: { in: number; out: number } }
 
 let dir = join(process.cwd(), ".engine-data", "work")
 const status = new Map<ProviderId, { cooling?: number; refused?: string }>()
@@ -144,7 +144,7 @@ export async function run(o: { job: Job; messages: Msg[]; schema?: { name: strin
   const hit = o.fresh ? null : read<Omit<Answer, "cached" | "tried"> | null>(cache, null)
   if (hit) {
     log({ at: new Date().toISOString(), job: o.job, ok: true, provider: hit.provider, model: hit.model, cached: true, ms: Date.now() - t0, tried: [] })
-    return { ...hit, cached: true, tried: [] }
+    return { ...hit, cached: true, tried: [], tokens: { in: 0, out: 0 } }
   }
   const s = settings()
   const u = usage()
@@ -156,13 +156,33 @@ export async function run(o: { job: Job; messages: Msg[]; schema?: { name: strin
     const p = provider(id)
     try {
       // the last one asked gets the usual second try when it's busy; before that, the next provider is the second try
-      const r = await chat({ model: modelOf(p, s), messages: o.messages, schema: o.schema, maxTokens: Math.min(o.maxTokens ?? p.out, p.out), temperature: o.temperature, via: via(p, s), once: i < ask.length - 1, timeoutMs: 120000 })
+      // (a model with another to fall back on is asked once, without the usual waits and retries)
+      const ask1 = (model: string, last: boolean) => chat({ model, messages: o.messages, schema: o.schema, maxTokens: Math.min(o.maxTokens ?? p.out, p.out), temperature: o.temperature, via: via(p, s), once: !last || i < ask.length - 1, timeoutMs: last ? 120000 : 60000 })
+      // a model picked in Settings that can't take this kind of request (one that only answers another API, or has no
+      // eyes or system prompt) hands it to the provider's own default model, rather than failing every job
+      // (and one that's overloaded, a 503, hands it to the next of the provider's own models)
+      const picked = modelOf(p, s)
+      const models = [...new Set([picked, ...(p.model ? [p.model] : []), ...(p.fallback ?? [])])]
+      let r: Reply | null = null
+      for (const [k, m] of models.entries()) {
+        try {
+          r = await ask1(m, k === models.length - 1)
+          break
+        } catch (e) {
+          const msg = (e as Error).message
+          // (Gemini's quotas are a model's own: one used up today leaves the others)
+          const passOn = /Interactions API|not enabled|modality|not supported|does not support|no longer available|\(503\)|\(429\)|high demand|overloaded|quota|free tier|used up|requests a day|didn't answer in time/i.test(msg)
+          if (!passOn || k === models.length - 1) throw e
+          tried.push({ id, why: `${m}: ${msg.slice(0, 90)}; asked ${models[k + 1]}` })
+        }
+      }
+      if (!r) throw new Error("no reply")
       if (!r.text.trim()) throw new Error(r.finish === "length" ? "its reply ran out of room before it said anything" : "an empty reply")
       count(id, r.usage)
       const out = { text: r.text, provider: id, model: r.model, finish: r.finish }
       write(cache, out)
       log({ at: new Date().toISOString(), job: o.job, ok: true, provider: id, model: r.model, ms: Date.now() - t0, tokens: (r.usage?.prompt_tokens ?? 0) + (r.usage?.completion_tokens ?? 0), tried })
-      return { ...out, cached: false, tried }
+      return { ...out, cached: false, tried, tokens: { in: r.usage?.prompt_tokens ?? 0, out: r.usage?.completion_tokens ?? 0 } }
     } catch (e) {
       const err = e as Error & { status?: number; resetAt?: number; retryAfter?: number }
       const next = after(err)

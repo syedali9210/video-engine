@@ -3,7 +3,7 @@
 // motiscope: its cut points (1.15, 2.95, 6.41, 7.71, 10.44, 12.21, 14.65 s), its layout on a 1080×1920 frame and its
 // colours are the reel's; the product, its mark and the words are params, so it's a template for any product.
 import type { CSSProperties, ReactNode } from "react";
-import { Baked, Caret, Cursor, Marked, Spark, Stage, acc, alpha, back, blink, clamp, expo, inOut, lerp, mix, out, seg, unmark, useClock, useFonts, useWebFonts } from "../_film/kit";
+import { Baked, Caret, Cursor, Marked, Slot, Spark, Stage, acc, alpha, back, blink, clamp, expo, inOut, lerp, mix, out, seg, unmark, useClock, useFonts, useWebFonts } from "../_film/kit";
 import { params as defaults } from "./params";
 
 type P = typeof defaults;
@@ -1015,7 +1015,7 @@ function Screen({ t, p }: { t: number; p: P }) {
       {t < T.logo && <Dock t={t} a={a} />}
       {t >= T.shatter && t < T.list && <Search t={t} p={p} a={a} />}
       {t >= T.logo && t < T.rain + 0.5 && <Logo t={t} a={a} />}
-      {t >= T.list && t < T.bento && <Playlist t={t} p={p} a={a} />}
+      {t >= T.list && t < T.bento && (p.screen ? <div data-pick="screen" style={{ ...fill, background: "#000" }}><Slot src={p.screen} t={t} w={PW} h={PH} /></div> : <Playlist t={t} p={p} a={a} />)}
       {t >= T.bento && t < T.roll && <Bento t={t} p={p} a={a} />}
       {t >= 10.0 && t < T.mood && <Roller t={t} p={p} a={a} />}
       {t >= T.mood && t < 15.2 && <Poster t={t} p={p} a={a} />}

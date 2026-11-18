@@ -1,0 +1,577 @@
+// The film maker: a product's launch film from its kit, by the director's rules (src/studio/maker.ts), with the
+// fewest AI calls it can. Once per product, the brief (what it is, for whom, the pain, the old way, the features with
+// their benefits, the real proof). Per film, one call that writes every line of the chosen template, told what each line
+// means in that template's story (src/studio/contracts.ts); a second only for lines that didn't fit. Everything else is
+// code: picking the template, filling the screens, building the composition, the checks. Rendering is the Studio's own,
+// asked of the engine in a headless page, so a film renders exactly as it would by hand. Every step is logged with its
+// time and tokens.
+//   GET  /__film/templates                      the templates with their contracts
+//   GET  /__film/brief?kit=                     the kit's brief (written once, then kept)
+//   POST /__film/brief { kit, fresh?, brief? }  write it (AI, or the rules without one), or save yours
+//   POST /__film/pick { kit, size?, length? }   the templates ranked for it, with reasons
+//   POST /__film/make { kit, template?, size?, length?, fresh? } -> the film: its lines, checks, composition, cost
+//   GET  /__film/get?id= · /__film/list
+//   POST /__film/edit { id, ops? , note? }      edits (or a note in plain words, read into edits); a new version
+//   POST /__film/render { id, draft? }          rendered by the Studio -> { job } (GET /__studio/jobs/:job)
+//   POST /__film/critic { id }                  stills of the last render read against the brief; fixes applied
+//   POST /__film/keep { id, keep }              your verdict: taste for the picker
+//   POST /__film/contract { film }              a contract drafted for a template that has none
+//   POST /__film/sequence { kit, parts: [{ template, shots?, screens? }], size?, length?, mood?, seam? }
+//                                               one film from several templates' shots
+import { execFileSync } from "node:child_process"
+import { randomUUID } from "node:crypto"
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs"
+import type { IncomingMessage, ServerResponse } from "node:http"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import type { Plugin, ViteDevServer } from "vite"
+import { parseJSON } from "./ai.ts"
+import { run, type Answer } from "./work.ts"
+import { loadKit } from "./kits.ts"
+import { devtools, dropProfile, findChrome, jobFile } from "./studio.ts"
+import { scored } from "./music.ts"
+import type { Brief, Op, Pick, Problem, Stage, TemplateInfo } from "../src/studio/maker.ts"
+import type { Contract } from "../src/studio/contracts.ts"
+import type { ProductKit } from "../src/studio/product.ts"
+import type { Slot } from "../src/studio/shots.ts"
+
+type Version = { at: string; template: string; film: string; size: string; values: Record<string, string>; problems: Problem[]; note?: string }
+export type FilmRecord = {
+  id: string
+  kit: string
+  name: string
+  made: string
+  picks: Pick[]
+  versions: Version[]
+  /** the composition of the latest version, as the Studio takes it */
+  comp: unknown
+  renders: { at: string; job: string; draft: boolean }[]
+  log: Stage[]
+  keep?: boolean
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+const read = (req: IncomingMessage, max = 4e6) =>
+  new Promise<string>((ok, no) => {
+    let s = ""
+    req.on("data", (b: Buffer) => ((s += b), s.length > max && no(new Error("too large"))))
+    req.on("end", () => ok(s))
+    req.on("error", no)
+  })
+const json = (res: ServerResponse, code: number, body: unknown) => {
+  res.statusCode = code
+  res.setHeader("content-type", "application/json")
+  res.end(JSON.stringify(body))
+}
+
+export function maker(): Plugin {
+  return {
+    name: "maker",
+    configureServer(server: ViteDevServer) {
+      const root = join(server.config.root, ".engine-data")
+      const dir = join(root, "films")
+      const briefs = join(dir, "briefs")
+      const contracts = join(root, "contracts")
+      for (const d of [dir, briefs, contracts]) mkdirSync(d, { recursive: true })
+      const origin = () => `http://localhost:${server.config.server.port ?? 5180}`
+
+      // the app's own modules, loaded as the dev server sees them (so the server never type-checks the app)
+      type M = typeof import("../src/studio/maker.ts")
+      type K = typeof import("../src/studio/contracts.ts")
+      const mods = async () => ({
+        M: (await server.ssrLoadModule("/src/studio/maker.ts")) as M,
+        K: (await server.ssrLoadModule("/src/studio/contracts.ts")) as K,
+        L: (await server.ssrLoadModule("/src/studio/library.ts")) as { slotsFor: (a: string) => Slot[]; LIBRARY: unknown[]; retimed: <X extends { duration: number }>(s: X, to: number) => X },
+        S: (await server.ssrLoadModule("/src/studio/shots.ts")) as { fitText: (s: Slot, v: string) => { ok: boolean; problems: string[] } },
+        P: (await server.ssrLoadModule("/src/studio/product.ts")) as { fillSlots: (k: ProductKit, s: Slot[]) => { values: Record<string, string>; kept: string[] }; kitCopy: (k: ProductKit) => Record<string, unknown> },
+        C: (await server.ssrLoadModule("/src/studio/comp.ts")) as { TEMPLATES: TemplateT[]; SAMPLE_COPY: Record<string, unknown> },
+        F: (await server.ssrLoadModule("/src/studio/formats.ts")) as { reframe: (c: unknown, size: string, lib: unknown[], focus: unknown) => CompT },
+        R: (await server.ssrLoadModule("/src/registry.ts")) as { byId: (id: string) => { params?: Record<string, unknown>; film?: { size: string; end: number; shots: { at: number; energy: number; enter: string }[] } } | undefined },
+      })
+      type CompT = { size: string; fps: number; music?: unknown; scenes: { duration: number; layers: { kind: string; anim?: string; values?: Record<string, unknown> }[] }[] }
+      type TemplateT = { id: string; name: string; film?: boolean; size?: string; make: (x: unknown) => CompT; values?: (x: unknown) => { anim: string; values: Record<string, string> } }
+
+      /* ---------------- records ---------------- */
+      const fileOf = (id: string) => join(dir, `${id}.json`)
+      const load = (id: string): FilmRecord | null => (/^[\w-]{6,64}$/.test(id) && existsSync(fileOf(id)) ? (JSON.parse(readFileSync(fileOf(id), "utf8")) as FilmRecord) : null)
+      const save = (f: FilmRecord) => writeFileSync(fileOf(f.id), JSON.stringify(f, null, 1))
+      const loadBrief = (kit: string): Brief | null => (existsSync(join(briefs, `${kit}.json`)) ? (JSON.parse(readFileSync(join(briefs, `${kit}.json`), "utf8")) as Brief) : null)
+      const saveBrief = (kit: string, b: Brief) => writeFileSync(join(briefs, `${kit}.json`), JSON.stringify(b, null, 1))
+      const drafts = (): Contract[] => readdirSync(contracts).filter((f) => f.endsWith(".json")).map((f) => JSON.parse(readFileSync(join(contracts, f), "utf8")) as Contract)
+      /** one line a step in the run log, kept with the film and across all films (what each video costs) */
+      const step = (log: Stage[], stage: string, t0: number, a?: Answer | null, note?: string) => {
+        const s: Stage = { stage, ms: Date.now() - t0, tokens: a ? a.tokens.in + a.tokens.out : 0, ...(a ? { model: a.model, cached: a.cached } : {}), ...(note ? { note } : {}) }
+        log.push(s)
+        appendFileSync(join(dir, "runs.jsonl"), JSON.stringify({ at: new Date().toISOString(), ...s }) + "\n")
+        return s
+      }
+      const taste = (): Record<string, number> => {
+        const t: Record<string, number> = {}
+        for (const f of readdirSync(dir).filter((x) => x.endsWith(".json"))) {
+          const r = JSON.parse(readFileSync(join(dir, f), "utf8")) as FilmRecord
+          const tpl = r.versions?.at(-1)?.template
+          if (tpl && r.keep !== undefined) t[tpl] = (t[tpl] ?? 0) + (r.keep ? 1 : -1)
+        }
+        return t
+      }
+
+      /** The templates as the picker sees them: each film template with its contract and what screens it takes. */
+      const templates = async () => {
+        const { K, L, C, R } = await mods()
+        const extra = drafts()
+        const ctx = { device: "iphone", posture: "open", name: "", anim: "", copy: C.SAMPLE_COPY }
+        return C.TEMPLATES.filter((t) => t.film && t.values)
+          .map((t) => {
+            const film = t.values!(ctx).anim
+            const m = R.byId(film)
+            const c = K.contractFor(film, extra)
+            const info: TemplateInfo = { id: t.id, film, name: t.name, size: (m?.film?.size ?? t.size ?? "16x9") as TemplateInfo["size"], seconds: m?.film?.end ?? 10, screens: L.slotsFor(film).filter((s) => s.kind !== "text" && s.kind !== "color") }
+            return c ? { t: info, c } : null
+          })
+          .filter((x): x is { t: TemplateInfo; c: Contract } => !!x)
+      }
+
+      /* ---------------- the brief ---------------- */
+      async function writeBrief(k: ProductKit, log: Stage[]): Promise<Brief> {
+        const { M } = await mods()
+        const t0 = Date.now()
+        try {
+          const a = await run({
+            job: "plan",
+            schema: M.BRIEF_SCHEMA,
+            maxTokens: 3000,
+            messages: [
+              { role: "system", content: "You write a product's brief for its launch film from the material given: who it's for, the pain it ends, how people do it today, the change it makes, its features each with what it lets the user do, real proof only. Use only facts in the material; never invent a number, customer, quote or address. Plain words, no hype. JSON only." },
+              { role: "user", content: M.briefMaterial(k) },
+            ],
+          })
+          const j = parseJSON(a.text) as Partial<Brief>
+          step(log, "brief", t0, a)
+          const base = M.briefFromKit(k)
+          return { ...base, ...j, features: Array.isArray(j.features) && j.features.length ? j.features : base.features, proof: Array.isArray(j.proof) ? j.proof : base.proof, banned: Array.isArray(j.banned) ? j.banned : [], url: j.url || base.url, by: "ai", updated: new Date().toISOString() } as Brief
+        } catch (e) {
+          step(log, "brief", t0, null, `the AI couldn't be asked (${(e as Error).message.slice(0, 120)}); written by the rules`)
+          return M.briefFromKit(k)
+        }
+      }
+
+      /* ---------------- the lines: one call, a second only for what didn't fit ---------------- */
+      async function writeLines(b: Brief, c: Contract, slots: Slot[], log: Stage[], extra = "") {
+        const { M, S } = await mods()
+        // the name and the address come from the brief; the writer gets only what needs writing
+        const values: Record<string, string> = M.fixedLines(b, c, slots)
+        let todo = slots.filter((s) => s.kind === "text" && s.pieces && !values[s.key])
+        let note = extra
+        for (let round = 0; round < 2 && todo.length; round++) {
+          const t0 = Date.now()
+          const req = M.linesRequest(b, c, todo, note)
+          let a: Answer | null = null
+          try {
+            a = await run({ job: "words", schema: req.schema, maxTokens: 4000, messages: req.messages })
+          } catch (e) {
+            step(log, round ? "lines, again" : "lines", t0, null, (e as Error).message.slice(0, 160))
+            break
+          }
+          step(log, round ? "lines, again" : "lines", t0, a)
+          const j = parseJSON(a.text) as Record<string, unknown>
+          const bad: string[] = []
+          for (const s of todo) {
+            const v = typeof j[s.key] === "string" ? (j[s.key] as string).trim() : ""
+            const f = v ? S.fitText(M.limitsOf(s, c, b.product), v) : { ok: false, problems: [`${s.label}: nothing came back.`] }
+            if (f.ok) values[s.key] = v
+            else bad.push(...f.problems)
+          }
+          todo = todo.filter((s) => !values[s.key])
+          note = `${extra}\n\nThese didn't fit last time; write just these again, shorter:\n${bad.join("\n")}`
+        }
+        return values
+      }
+
+      /* ---------------- the composition, as the app builds it from a template ---------------- */
+      /** The score for a composition: each scene's shot (its film and where in it the scene starts) says its energy and
+          how it comes in. */
+      async function scoreComp(made: CompT, mood: string) {
+        const { R } = await mods()
+        let at = 0
+        const cuts = made.scenes.map((s) => {
+          const l = s.layers.find((x) => x.kind === "component") as { anim?: string; from?: number } | undefined
+          const shot = R.byId(l?.anim ?? "")?.film?.shots.find((x) => Math.abs(x.at - (l?.from ?? -1)) < 0.05)
+          const cut = { at: Math.round(at * 1000) / 1000, energy: shot?.energy ?? 2, enter: shot?.enter ?? "cut" }
+          at += s.duration
+          return cut
+        })
+        return scored(join(root, "music"), cuts, at, mood as Parameters<typeof scored>[3])
+      }
+
+      /** `o.fit`: the theme's reach whatever the contract says; `o.music: false`: no score (a part of a longer film);
+          `o.run`: where a longer film's screens are up to; `o.screens`: slot -> kit file name, as a director picks them */
+      async function compose(templateId: string, k: ProductKit, b: Brief, values: Record<string, string>, size: string, o: { fit?: "product" | "accent"; music?: boolean; run?: { taken: Set<string>; next: number }; screens?: Record<string, string> } = {}) {
+        const { C, F, L, P, R, M, K } = await mods()
+        const t = C.TEMPLATES.find((x) => x.id === templateId)
+        if (!t?.values) throw new Error(`No film template “${templateId}”`)
+        const ctx = { device: "iphone", posture: "open", name: b.product, anim: "maze-walk", copy: { ...P.kitCopy(k), name: b.product }, accent: k.brand.accent, kit: k }
+        const raw = t.make(ctx)
+        const film = t.values(ctx)
+        const c = K.contractFor(film.anim, drafts())
+        // the screens by the story (the home screen where the film opens on the app, then each feature's own screen),
+        // not by shape alone
+        const named = Object.fromEntries(
+          Object.entries(o.screens ?? {}).flatMap(([key, name]) => {
+            const f = k.files.find((x) => x.name === name || x.id === name)
+            if (f) o.run?.taken.add(f.id)
+            return f ? [[key, `${f.kind === "clip" ? "video" : "image"}:${f.url}${f.focus ? `#focus=${f.focus.x},${f.focus.y}` : ""}`]] : []
+          }),
+        )
+        Object.assign(film.values, M.storyScreens(b, k, L.slotsFor(film.anim).filter((s) => !named[s.key]), film.values, o.run), named)
+        // a slot that wants a whole page only takes a picture that is one (tall): a single screen there would hide the
+        // page the template draws with the product's own lines
+        for (const sl of L.slotsFor(film.anim).filter((x) => x.kind === "screen" && /full-page|whole page/i.test(x.hint ?? ""))) {
+          const f = k.files.find((x) => film.values[sl.key]?.endsWith(x.url))
+          if (f && !(f.w && f.h && f.h / f.w > 1.6)) delete film.values[sl.key]
+        }
+        const all: Record<string, string> = { ...film.values, ...values }
+        // the product's colours and type over the template's (a film made before keeps the choice it had: "" is the
+        // template's own)
+        if (all.theme === undefined) {
+          const th = M.themeFor(k, c)
+          if (th && o.fit) th.fit = o.fit
+          if (th) all.theme = JSON.stringify(th)
+        }
+        const th = all.theme ? (JSON.parse(all.theme) as { accent?: string }) : null
+        if (th?.accent && L.slotsFor(film.anim).some((s) => s.kind === "color" && s.key === "accent")) all.accent = th.accent
+        let made: CompT = { ...raw, fps: 60, scenes: raw.scenes.map((sc) => ({ ...sc, layers: sc.layers.map((l) => (l.kind === "component" && l.anim === film.anim ? { ...l, values: { ...(R.byId(film.anim)?.params ?? {}), ...l.values, ...all } } : l)) })) }
+        const native = t.size ?? made.size
+        made = { ...made, size: native }
+        if (size && size !== native) {
+          const focus = JSON.parse(readFileSync(join(server.config.root, "src", "studio", "lib", "focus.json"), "utf8"))
+          made = F.reframe(made, size, L.LIBRARY, focus)
+        }
+        // the score, made for this film's cuts: each scene's shot says its energy and how it comes in
+        const mood = all.music || M.moodFor(c)
+        if (mood !== "none" && o.music !== false) made = { ...made, music: await scoreComp(made, mood) }
+        return { comp: made, film: film.anim, values: all }
+      }
+
+      /* ---------------- making a film ---------------- */
+      async function make(o: { kit: string; template?: string; size?: string; length?: number; fresh?: boolean }) {
+        const { M, K, L, S } = await mods()
+        const log: Stage[] = []
+        const k = loadKit(o.kit)
+        if (!k) throw new Error(`No product kit “${o.kit}”`)
+        let t0 = Date.now()
+        // a brief the rules wrote (the AI was down) is asked again; one the AI or you wrote is kept
+        let b = !o.fresh ? loadBrief(k.id) : null
+        if (b?.by === "rules") b = null
+        if (b) step(log, "brief", t0, null, "kept from before")
+        else saveBrief(k.id, (b = await writeBrief(k, log)))
+        t0 = Date.now()
+        const list = await templates()
+        const picks = M.pick(b, list, { size: o.size, length: o.length, kitFiles: k.files, taste: taste() })
+        const chosen = o.template && o.template !== "auto" ? (picks.find((p) => p.id === o.template || p.film === o.template) ?? null) : picks[0]
+        if (!chosen) throw new Error(`No film template “${o.template}”. There are: ${picks.map((p) => p.id).join(", ")}`)
+        step(log, "pick", t0, null, `${chosen.name}: ${chosen.reasons.join("; ")}`)
+        const c = K.contractFor(chosen.film, drafts())!
+        const slots = L.slotsFor(chosen.film)
+        const written = await writeLines(b, c, slots, log)
+        t0 = Date.now()
+        const { comp, film, values } = await compose(chosen.id, k, b, written, o.size ?? "")
+        const problems = M.checkLines(values, slots, c, b, S.fitText)
+        step(log, "build and check", t0, null, `${Object.keys(written).length} lines written, ${problems.filter((p) => p.level === "error").length} problems`)
+        const f: FilmRecord = { id: randomUUID().slice(0, 12), kit: k.id, name: `${b.product}: ${chosen.name}`, made: new Date().toISOString(), picks: picks.slice(0, 5), versions: [{ at: new Date().toISOString(), template: chosen.id, film, size: comp.size, values, problems }], comp, renders: [], log }
+        save(f)
+        return f
+      }
+
+      /* ---------------- a film of several templates' shots ---------------- */
+      type Part = { template: string; /** which of its shots, by index (all if none) */ shots?: number[]; /** slot -> kit file name */ screens?: Record<string, string> }
+      /** One film from several templates' shots, in order: each part's lines written at once (only the lines its kept
+          shots show, every part in parallel), every part on the same theme (the product's, ground and all: one film,
+          one ground), the screens carrying on from part to part, the seams dissolved, the last shot held to `length`,
+          one score over the whole. */
+      async function makeSequence(o: { kit: string; parts: Part[]; size?: string; length?: number; mood?: string; seam?: string }) {
+        const { M, L, S } = await mods()
+        const log: Stage[] = []
+        const k = loadKit(o.kit)
+        if (!k) throw new Error(`No product kit “${o.kit}”`)
+        if (!o.parts?.length) throw new Error("A sequence needs its parts: [{ template, shots? }]")
+        let t0 = Date.now()
+        let b = loadBrief(k.id)
+        if (b?.by === "rules") b = null
+        if (b) step(log, "brief", t0, null, "kept from before")
+        else saveBrief(k.id, (b = await writeBrief(k, log)))
+        const brief = b
+        const list = await templates()
+        const LIB = L.LIBRARY as { id: string; film: string }[]
+        const parts = o.parts.map((p) => {
+          const x = list.find((y) => y.t.id === p.template || y.t.film === p.template)
+          if (!x) throw new Error(`No film template “${p.template}”`)
+          const ids = LIB.filter((s) => s.film === x.t.film).map((s) => s.id)
+          const keep = p.shots ? p.shots.map((i) => ids[i]).filter(Boolean) : ids
+          // the lines its kept shots show (a line no shot is measured to show is written anyway: it may be on screen)
+          const slots = L.slotsFor(x.t.film).filter((s) => s.kind !== "text" || !s.shots.length || s.shots.some((id) => keep.includes(id)))
+          return { p, x, slots }
+        })
+        const written = await Promise.all(parts.map(({ x, slots }) => writeLines(brief, x.c, slots, log)))
+        t0 = Date.now()
+        const run = { taken: new Set<string>(), next: 0 }
+        const built: { name: string; film: string; values: Record<string, string>; problems: Problem[]; scenes: CompT["scenes"]; comp: CompT }[] = []
+        for (const [i, { p, x, slots }] of parts.entries()) {
+          const r = await compose(x.t.id, k, brief, written[i], o.size ?? "16x9", { fit: "product", music: false, run, screens: p.screens })
+          const scenes = p.shots ? r.comp.scenes.filter((_, j) => p.shots!.includes(j)) : r.comp.scenes
+          built.push({ name: x.t.name, film: r.film, values: r.values, problems: M.checkLines(r.values, slots, x.c, brief, S.fitText), scenes, comp: r.comp })
+        }
+        // the seams: the next part comes in through a dissolve
+        let scenes = built.flatMap((x, i) => x.scenes.map((s, j) => (i && !j ? { ...s, transition: o.seam ?? "dissolve" } : s)))
+        if (o.length) {
+          const before = scenes.slice(0, -1).reduce((a, s) => a + s.duration, 0)
+          const last = scenes.at(-1)!
+          scenes = [...scenes.slice(0, -1), L.retimed(last, Math.max(last.duration * 0.6, o.length - before))]
+        }
+        let comp: CompT = { ...built[0].comp, scenes }
+        const mood = o.mood ?? M.moodFor(parts[0].x.c)
+        if (mood !== "none") comp = { ...comp, music: await scoreComp(comp, mood) }
+        const total = scenes.reduce((a, s) => a + s.duration, 0)
+        const problems = built.flatMap((x, i) => x.problems.map((q) => ({ ...q, key: `${i + 1}.${q.key}` })))
+        step(log, "build and check", t0, null, `${built.length} parts, ${scenes.length} shots, ${total.toFixed(2)} s; ${written.reduce((a, w) => a + Object.keys(w).length, 0)} lines written, ${problems.filter((q) => q.level === "error").length} problems`)
+        const values = Object.fromEntries(built.flatMap((x, i) => Object.entries(x.values).map(([key, v]) => [`${i + 1}.${key}`, v])))
+        const f: FilmRecord = {
+          id: randomUUID().slice(0, 12),
+          kit: k.id,
+          name: `${brief.product}: ${built.map((x) => x.name).join(" + ")}`,
+          made: new Date().toISOString(),
+          picks: [],
+          versions: [{ at: new Date().toISOString(), template: parts.map((x) => x.x.t.id).join("+"), film: "sequence", size: comp.size, values, problems, note: `shots: ${o.parts.map((p) => `${p.template}${p.shots ? `[${p.shots.join(",")}]` : ""}`).join(" + ")}` }],
+          comp,
+          renders: [],
+          log,
+        }
+        save(f)
+        return f
+      }
+
+      /* ---------------- edits ---------------- */
+      async function edit(f: FilmRecord, ops: Op[], note?: string) {
+        const { M, K, L, S } = await mods()
+        const k = loadKit(f.kit)!
+        const b = loadBrief(f.kit) ?? M.briefFromKit(k)
+        const last = f.versions.at(-1)!
+        let template = last.template
+        let size = last.size
+        let values = { ...last.values }
+        let restored = false
+        const c = () => K.contractFor(f.versions.at(-1)!.film, drafts())!
+        for (const o of ops) {
+          if (o.op === "line") values[o.key] = o.value
+          else if (o.op === "restore") {
+            const v = f.versions[o.version]
+            if (!v) throw Object.assign(new Error(`No version ${o.version}: there are ${f.versions.length}`), { code: 400 })
+            ;({ template, size } = v)
+            values = { ...v.values }
+            restored = true
+          } else if (o.op === "music") values.music = o.mood
+          else if (o.op === "screen") {
+            const file = k.files.find((x) => x.id === o.file)
+            if (file) values[o.key] = `${file.kind === "clip" ? "video" : "image"}:${file.url}`
+          } else if (o.op === "template") template = (await templates()).find((x) => x.t.id === o.id || x.t.film === o.id)?.t.id ?? template
+          else if (o.op === "size") size = o.size
+          else if (o.op === "theme") values.theme = o.fit === "template" ? "" : JSON.stringify({ ...(M.themeFor(k, c()) ?? {}), fit: o.fit })
+          else if (o.op === "rewrite") {
+            const slots = L.slotsFor(last.film).filter((s) => !o.keys?.length || o.keys.includes(s.key))
+            Object.assign(values, await writeLines(b, c(), slots, f.log, `\n\nA note from the person making the film: ${o.note}`))
+          }
+        }
+        // a new template is new lines: written for it (a version gone back to has its own)
+        if (template !== last.template && !restored) {
+          const film = (await templates()).find((x) => x.t.id === template)!.t.film
+          values = await writeLines(b, K.contractFor(film, drafts())!, L.slotsFor(film), f.log)
+        }
+        const built = await compose(template, k, b, values, size)
+        const sceneOps = ops.filter((o) => o.op === "drop" || o.op === "move" || o.op === "retime")
+        const comp = sceneOps.length ? { ...built.comp, scenes: M.applySceneOps(built.comp.scenes, sceneOps) } : built.comp
+        const problems = M.checkLines(built.values, L.slotsFor(built.film), K.contractFor(built.film, drafts()), b, S.fitText)
+        // what changed, said in the version list when no note said it
+        const said = note ?? ops.map((o) => (o.op === "theme" ? `colours: ${o.fit === "template" ? "the template's" : o.fit === "accent" ? "the product's accent" : "the product's"}` : o.op === "music" ? `music: ${o.mood}` : o.op === "restore" ? `back to version ${o.version + 1}` : o.op === "line" ? `${o.key} set` : o.op === "screen" ? `${o.key}: another screen` : o.op)).join(", ")
+        f.versions.push({ at: new Date().toISOString(), template, film: built.film, size: comp.size, values: built.values, problems, ...(said ? { note: said } : {}) })
+        f.comp = comp
+        save(f)
+        return f
+      }
+      /** A note in plain words, read into edits (one small call); the lines it names are rewritten with it. */
+      async function noteToOps(f: FilmRecord, note: string) {
+        const { M, L } = await mods()
+        const last = f.versions.at(-1)!
+        const t0 = Date.now()
+        const lines = L.slotsFor(last.film).filter((s) => s.kind === "text").map((s) => ({ key: s.key, label: s.label, now: last.values[s.key] ?? s.example }))
+        const scenes = (f.comp as CompT).scenes.map((s, i) => ({ scene: i, name: (s as { name?: string }).name, seconds: s.duration }))
+        const a = await run({
+          job: "plan",
+          schema: M.OPS_SCHEMA,
+          maxTokens: 1500,
+          messages: [
+            { role: "system", content: "You turn a note about a launch film into edits. Edits: line (set one line exactly), rewrite (have lines rewritten with the note: give their keys), template (another film template by id), size (16x9, 9x16, 1x1, 4x5), drop/move/retime (scenes by index), screen (a slot's picture: a kit file id). Prefer rewrite for anything about wording. Give each edit only the fields it needs. JSON only." },
+            { role: "user", content: JSON.stringify({ note, lines, scenes, templates: (await templates()).map((x) => ({ id: x.t.id, idea: x.c.idea })) }) },
+          ],
+        })
+        step(f.log, "note", t0, a, note)
+        const j = parseJSON(a.text) as { ops?: Op[]; say?: string }
+        return { ops: Array.isArray(j.ops) ? j.ops : [], say: j.say ?? "" }
+      }
+
+      /* ---------------- rendering, by the Studio itself ---------------- */
+      async function render(f: FilmRecord, draft: boolean) {
+        const chrome = findChrome()
+        if (!chrome) throw new Error("Couldn't find Chrome or Edge.")
+        const profile = mkdtempSync(join(tmpdir(), "anim-engine-chrome-maker-"))
+        const cdp = await devtools(chrome, profile)
+        const t0 = Date.now()
+        try {
+          await cdp.send("Page.enable")
+          await cdp.send("Emulation.setDeviceMetricsOverride", { width: 1600, height: 1000, deviceScaleFactor: 1, mobile: false })
+          await cdp.send("Page.navigate", { url: origin() + "/" })
+          for (let i = 0; i < 200 && !(await cdp.evaluate("!!window.__engine?.load").catch(() => false)); i++) await sleep(150)
+          await cdp.evaluate(`window.__engine.load(${JSON.stringify(f.comp)})`)
+          // the Studio mounts the film's scenes and their screens
+          await sleep(5000)
+          const job = String(await cdp.evaluate(`window.__engine.render("video", { draft: ${draft} })`))
+          f.renders.push({ at: new Date().toISOString(), job, draft })
+          step(f.log, draft ? "draft render queued" : "render queued", t0)
+          save(f)
+          // the render's own time, logged when it finishes (this call returns once it's queued)
+          const started = Date.now()
+          void (async () => {
+            for (let i = 0; i < 7200; i++) {
+              await sleep(1000)
+              const s = (await fetch(`${origin()}/__studio/jobs/${job}`).then((r) => r.json()).catch(() => null)) as { state?: string; total?: number } | null
+              if (s?.state !== "done" && s?.state !== "error") continue
+              const g = load(f.id)
+              if (g) (step(g.log, `${draft ? "draft render" : "render"} ${s.state === "done" ? "done" : "failed"}`, started, null, `${s.total ?? 0} frames`), save(g))
+              return
+            }
+          })()
+          return job
+        } finally {
+          await cdp.close()
+          dropProfile(profile)
+        }
+      }
+
+      /* ---------------- the critic: stills of the last render, read against the brief ---------------- */
+      async function critic(f: FilmRecord) {
+        const { M, K, L } = await mods()
+        const last = f.renders.at(-1)
+        const file = last ? jobFile(last.job) : undefined
+        if (!file) throw new Error("Render it first (a draft will do), and wait for it to finish.")
+        const comp = f.comp as CompT
+        const starts = comp.scenes.reduce<number[]>((a, s, i) => [...a, i ? a[i - 1] + comp.scenes[i - 1].duration : 0], [])
+        const at = comp.scenes.map((s, i) => starts[i] + s.duration * 0.7).slice(0, 8)
+        const ff = process.env.STUDIO_FFMPEG || "ffmpeg"
+        const stills = at.map((t) => execFileSync(ff, ["-v", "error", "-ss", t.toFixed(2), "-i", file, "-frames:v", "1", "-vf", "scale=640:-2", "-f", "image2", "-c:v", "mjpeg", "-q:v", "5", "-"], { maxBuffer: 1e7 }).toString("base64"))
+        const v = f.versions.at(-1)!
+        const b = loadBrief(f.kit)
+        const c = K.contractFor(v.film, drafts())
+        const t0 = Date.now()
+        const a = await run({
+          job: "critic",
+          schema: M.CRITIC_SCHEMA,
+          maxTokens: 4000,
+          messages: [
+            { role: "system", content: "You review stills of a product's launch film against its brief and the film's contract. Look for: words that don't read (too small, cut off, on a busy ground), lines that don't tell this product's story, anything left from the reference film (another product's name, figures, words). Say what you saw in a sentence or two, and list the lines to fix (their keys, from the lines given) with how to rewrite each. If it's good, no fixes. JSON only." },
+            { role: "user", content: [{ type: "text", text: JSON.stringify({ brief: b, film: c?.idea, lines: v.values, shots: c?.shots, slots: L.slotsFor(v.film).filter((s) => s.kind === "text").map((s) => s.key) }) }, ...stills.map((s) => ({ type: "image_url" as const, image_url: { url: `data:image/jpeg;base64,${s}` } }))] },
+          ],
+        })
+        step(f.log, "critic", t0, a)
+        const j = parseJSON(a.text) as { fixes?: { key: string; note: string }[]; say?: string }
+        const known = new Set(Object.keys(v.values))
+        const ops: Op[] = (Array.isArray(j.fixes) ? j.fixes : []).filter((x) => known.has(x.key)).map((x) => ({ op: "rewrite", keys: [x.key], note: x.note }))
+        return { say: j.say ?? "", film: ops.length ? await edit(f, ops, `critic: ${j.say ?? ""}`) : f, ops }
+      }
+
+      /* ---------------- a contract drafted for a template without one ---------------- */
+      async function draftContract(film: string) {
+        const { L, R } = await mods()
+        const m = R.byId(film) as { film?: { shots: { name: string; role: string[] }[] } } & Record<string, unknown> | undefined
+        if (!m) throw new Error(`No template “${film}”`)
+        const a = await run({
+          job: "plan",
+          maxTokens: 3000,
+          messages: [
+            { role: "system", content: "You write a story contract for a launch film template: its idea in one sentence, the story shape (launch, problem-solution, before-after, day-in-life, countdown, teaser, walkthrough), the kinds of product it suits and doesn't, its tone, its pace (1 calm to 3 fast), what it needs (how many features, whether a real number, whether the product's site), each shot's job, and for each text slot what it means (name, product, kicker, hook, pain, old-way, promise, benefit, feature, feature-list, action, detail, proof, tagline, cta, url, ui, example), how to write it in a line, which feature it carries (0 = strongest) and whether it must be a real figure. JSON only, in the shape: {film, idea, arc, fits[], avoid[], tone, pace, needs:{features, proof, site}, shots:{name: job}, slots:{key:{means, say, feature?, factual?}}}." },
+            { role: "user", content: JSON.stringify({ film, about: m.blurb, shots: m.film?.shots, slots: L.slotsFor(film).map((s) => ({ key: s.key, kind: s.kind, label: s.label, hint: s.hint, example: s.example })) }) },
+          ],
+        })
+        const raw = parseJSON(a.text) as Contract
+        // (models echo the shape's "feature?" as a key: the rules' own names, kept only when set)
+        const slots = Object.fromEntries(Object.entries(raw.slots ?? {}).map(([k, r]) => {
+          const x = Object.fromEntries(Object.entries(r as Record<string, unknown>).map(([f, v]) => [f.replace(/\?$/, ""), v]).filter(([, v]) => v !== null && v !== undefined && v !== "")) as Contract["slots"][string]
+          return [k, x]
+        }))
+        const c: Contract = { ...raw, slots, film, by: "draft" }
+        writeFileSync(join(contracts, `${film}.json`), JSON.stringify(c, null, 1))
+        return c
+      }
+
+      server.middlewares.use(async (req, res, next) => {
+        const url = new URL(req.url ?? "/", "http://x")
+        if (!url.pathname.startsWith("/__film/")) return next()
+        const what = url.pathname.slice("/__film/".length)
+        try {
+          const body = req.method === "POST" ? (JSON.parse((await read(req)) || "{}") as Record<string, unknown>) : {}
+          const get = (id: unknown) => {
+            const f = load(String(id ?? ""))
+            if (!f) throw Object.assign(new Error("No such film"), { code: 404 })
+            return f
+          }
+          if (what === "templates") return json(res, 200, (await templates()).map((x) => ({ ...x.t, contract: x.c })))
+          if (what === "brief" && req.method === "GET") return json(res, 200, loadBrief(url.searchParams.get("kit") ?? "") ?? null)
+          if (what === "brief") {
+            const k = loadKit(String(body.kit))
+            if (!k) return json(res, 404, { error: "No such product kit" })
+            if (body.brief) {
+              const b = { ...(body.brief as Brief), by: "you" as const, updated: new Date().toISOString() }
+              saveBrief(k.id, b)
+              return json(res, 200, b)
+            }
+            const log: Stage[] = []
+            const b = await writeBrief(k, log)
+            saveBrief(k.id, b)
+            return json(res, 200, { brief: b, log })
+          }
+          if (what === "pick") {
+            const k = loadKit(String(body.kit))
+            if (!k) return json(res, 404, { error: "No such product kit" })
+            const { M } = await mods()
+            const b = loadBrief(k.id) ?? M.briefFromKit(k)
+            return json(res, 200, M.pick(b, await templates(), { size: body.size as string, length: Number(body.length) || undefined, kitFiles: k.files, taste: taste() }))
+          }
+          if (what === "make") return json(res, 200, await make({ kit: String(body.kit), template: body.template as string, size: body.size as string, length: Number(body.length) || undefined, fresh: !!body.fresh }))
+          if (what === "sequence") return json(res, 200, await makeSequence(body as Parameters<typeof makeSequence>[0]))
+          if (what === "get") return json(res, 200, get(url.searchParams.get("id")))
+          if (what === "list")
+            return json(res, 200, readdirSync(dir).filter((x) => x.endsWith(".json")).map((x) => JSON.parse(readFileSync(join(dir, x), "utf8")) as FilmRecord).map((f) => ({ id: f.id, kit: f.kit, name: f.name, made: f.made, versions: f.versions.length, keep: f.keep })).sort((a, b) => (a.made < b.made ? 1 : -1)))
+          if (what === "edit") {
+            const f = get(body.id)
+            if (f.versions.at(-1)?.film === "sequence") return json(res, 400, { error: "A film of several templates can't be edited yet: change its parts and make it again (POST /__film/sequence)." })
+            let ops = Array.isArray(body.ops) ? (body.ops as Op[]) : []
+            let say = ""
+            if (!ops.length && typeof body.note === "string" && body.note.trim()) ({ ops, say } = await noteToOps(f, body.note.trim()))
+            if (!ops.length) return json(res, 200, { film: f, say: say || "Nothing to change." })
+            return json(res, 200, { film: await edit(f, ops, typeof body.note === "string" ? body.note : undefined), say, ops })
+          }
+          if (what === "render") return json(res, 200, { job: await render(get(body.id), !!body.draft) })
+          if (what === "critic") return json(res, 200, await critic(get(body.id)))
+          if (what === "keep") {
+            const f = get(body.id)
+            f.keep = !!body.keep
+            save(f)
+            return json(res, 200, { ok: true })
+          }
+          if (what === "contract") return json(res, 200, await draftContract(String(body.film)))
+          next()
+        } catch (e) {
+          const err = e as Error & { code?: number }
+          json(res, err.code ?? 500, { error: err.message })
+        }
+      })
+    },
+  }
+}

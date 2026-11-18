@@ -23,6 +23,7 @@ export default {
     size: "16x9",
     end: 31,
     look: "blueprint",
+    tone: { ground: "#f0f0f0", ink: "#111111" },
     shots: [
       { name: "Opening", at: 0, role: ["hook", "intro"], energy: 1, enter: "cut", exit: "pull-out" },
       { name: "Picture", at: 2.6, role: ["product"], energy: 1, enter: "pull-out", exit: "cut" },

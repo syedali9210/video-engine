@@ -22,6 +22,7 @@ export default {
     size: "16x9",
     end: 12.55,
     look: "night",
+    tone: { ground: "#141414", ink: "#d9d9d9", accent: "#3de8e4" },
     shots: [
       { name: "Liquid", at: 0, role: ["hook", "logo"], energy: 3, enter: "cut", exit: "flash" },
       { name: "Ask", at: 2.92, role: ["intro", "feature"], energy: 2, enter: "type", exit: "pan" },
