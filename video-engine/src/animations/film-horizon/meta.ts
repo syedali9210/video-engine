@@ -22,6 +22,7 @@ export default {
     size: "16x9",
     end: 23.6,
     look: "space",
+    tone: { ground: "#0b0b10", ink: "#ffffff", accent: "#7d8cff" },
     chrome: ["Send", "Recv"],
     shots: [
       { name: "Grid", at: 0, role: ["hook", "logo"], energy: 2, enter: "cut", exit: "pan" },
@@ -51,5 +52,8 @@ export default {
     tagline: { type: "text", label: "Tagline", group: "Ending" },
     url: { type: "text", label: "Address", group: "Ending" },
     unit: { type: "text", label: "Currency", group: "Product" },
+    screen1: { type: "screen", label: "First panel", group: "Screens", hint: "In place of the send panel, tilted in the dark (16:10)." },
+    screen2: { type: "screen", label: "Second panel", group: "Screens", hint: "In place of the import panel (16:10)." },
+    screen3: { type: "screen", label: "Last panel", group: "Screens", hint: "In place of the ledger, beside the last line (16:10)." },
   },
 } satisfies Omit<AnimMeta, "id">;

@@ -18,6 +18,7 @@ import {
 import { renderToStaticMarkup } from "react-dom/server";
 import { byId, htmlUrl, withDefaults } from "../../registry";
 import "./film.css";
+import { resolve } from "./tone";
 
 /* ---------------- time and easing (GSAP's names, in comments) ---------------- */
 
@@ -535,7 +536,7 @@ export const unmark = (s: string) => s.replace(/\*/g, "");
 /* ---------------- colour and the product's mark ---------------- */
 
 const rgbOf = (h: string) => {
-  const m = /^#?([0-9a-f]{6})$/i.exec(h.trim());
+  const m = /^#?([0-9a-f]{6})$/i.exec(resolve(h).trim());
   const n = m ? parseInt(m[1], 16) : 0xfc8019;
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 };
@@ -567,7 +568,7 @@ let ctx2d: CanvasRenderingContext2D | null = null;
 /** How wide a line of text is in a CSS font ("700 40px Geist"). */
 export const measure = (s: string, font: string) => {
   ctx2d ??= document.createElement("canvas").getContext("2d");
-  ctx2d!.font = font;
+  ctx2d!.font = resolve(font);
   return ctx2d!.measureText(s).width;
 };
 /** A camera over a flat world: what's at (cx, cy) sits at the frame's centre, `z` times bigger. */
@@ -768,6 +769,15 @@ export function Slot(o: { src?: string; t?: number; w?: number; h?: number; fit?
     <SlotBody {...o} />
   );
 }
+/** A product's own screen in place of a panel a film draws (its reference product's interface): the panel's card (its
+    ground, edge and shadow: `style`) at the screen's shape, `w` wide, the screen filling it. */
+export function Shown({ src, t, w, aspect = 1.6, style, pick }: { src: string; t?: number; w: number; aspect?: number; style?: CSSProperties; pick?: string }) {
+  return (
+    <div data-pick={pick} style={{ ...style, position: "relative", width: w, height: Math.round(w / aspect), padding: 0, overflow: "hidden", boxSizing: "border-box" }}>
+      <Slot src={src} t={t} />
+    </div>
+  );
+}
 /** A slot's value, read: its kind, its address, and what a product kit says after `#` (studio/product.ts slotValue): where to
     look (`focus=x,y`, fractions: the crop keeps it), a clip's part (`t=from,to`, s), chrome cut off each edge
     (`crop=top,right,bottom,left`, fractions). */
@@ -923,7 +933,8 @@ export function Baked({ w, h, scale = 1, deps, children, style, onReady, pick }:
   const [drawn, setDrawn] = useState("");
   // the user's changes to its parts (the looks) are drawn in with it
   const looks = useSyncExternalStore(onLooks, () => looksCss);
-  const full = looks ? `<style>${looks}</style>${markup}` : markup;
+  // (a drawing is an image: the theme's variables are written into it, since an image can't read them)
+  const full = resolve(looks ? `<style>${looks}</style>${markup}` : markup, true);
   useEffect(() => {
     (ref.current as HTMLCanvasElement & { __markup?: string }).__markup = full;
     let live = true;

@@ -11,4 +11,6 @@ export const params = {
   connect: "Connect the tools",
   team: "your team uses",
   tools: "X|GitHub|Slack|Asana|Zoom|Todo|Figma|Notion",
+  page: "",
+  mark: "",
 };

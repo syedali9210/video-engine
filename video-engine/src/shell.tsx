@@ -3,7 +3,7 @@
 // and the galleries are pages on one sheet (a title, one line, one action, then the work drawn big). Opening something
 // goes full-screen into its editor, whose toolbar starts with the way back.
 import { createContext, startTransition, useContext, useLayoutEffect, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
-import { ArrowLeft, DotsThree, FilmStrip, Flask, FrameCorners, House, MagnifyingGlass, Plus, SidebarSimple, Tray, Package } from "@phosphor-icons/react"
+import { ArrowLeft, DotsThree, FilmStrip, Flask, FrameCorners, Gradient, House, MagnifyingGlass, Plus, SidebarSimple, Tray, Package } from "@phosphor-icons/react"
 import type { Icon } from "./ui"
 import { Logo, Popover, Tip, rove, useFlip } from "./ui"
 
@@ -25,7 +25,7 @@ export function BrandRow({ children }: { children?: ReactNode }) {
   )
 }
 
-export type Space = "home" | "product" | "films" | "creatives" | "lab"
+export type Space = "home" | "product" | "films" | "creatives" | "shaders" | "lab"
 /** The places, named for what's in them. */
 export const SPACES: { id: Space; name: string; icon: Icon }[] = [
   { id: "home", name: "Home", icon: House },
@@ -33,6 +33,8 @@ export const SPACES: { id: Space; name: string; icon: Icon }[] = [
   ...(import.meta.env.DEV ? [{ id: "product" as const, name: "Product", icon: Package }] : []),
   { id: "films", name: "Films", icon: FilmStrip },
   { id: "creatives", name: "Creatives", icon: FrameCorners },
+  // moving gradients, gradient shapes, liquid logos and 3D scenes, made into videos
+  { id: "shaders", name: "Shaders", icon: Gradient },
   ...(import.meta.env.DEV ? [{ id: "lab" as const, name: "Lab", icon: Flask }] : []),
 ]
 

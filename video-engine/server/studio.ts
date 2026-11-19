@@ -34,6 +34,8 @@ type Job = {
   checks?: Gate
   /** scenes taken from the render cache, not rendered again */
   cached?: number
+  /** stops it where it is (DELETE /__studio/jobs/:id) */
+  stop?: () => void
   /** its best stills for a thumbnail, once asked for */
   thumbs?: { t: number; file: string }[]
 }
@@ -173,7 +175,10 @@ export async function devtools(chrome: string, profile: string) {
     // Chrome can quit without answering, and a close that never settles would hold the render queue forever
     await Promise.race([send("Browser.close").catch(() => {}), sleep(2000)])
     ws.close()
-    proc.kill()
+    // on Windows kill() ends only the parent: its GPU, renderer and utility children live on and pile up (20 after
+    // one afternoon of renders), so the whole tree goes
+    if (process.platform === "win32" && proc.pid && proc.exitCode === null) spawnSync("taskkill", ["/PID", String(proc.pid), "/T", "/F"], { stdio: "ignore" })
+    else proc.kill()
   }
   return { send, evaluate, close, errors, proc, frames, on }
 }
@@ -243,7 +248,8 @@ async function render(job: Job, body: Body, origin: string, root?: string) {
     return
   }
 
-  const fps = body.fps === 60 ? 60 : 30
+  // (a few frames a second: stills to judge a film by, not a film)
+  const fps = body.fps === 60 ? 60 : body.fps >= 1 && body.fps < 30 ? Math.round(body.fps) : 30
   const n = Math.max(1, Math.round(body.config.duration * fps))
   // motion blur: four moments across a 180° shutter per frame, averaged; ghost: bright things leave fading trails
   const k = body.config.comp?.blur ? 4 : 1
@@ -277,6 +283,7 @@ async function render(job: Job, body: Body, origin: string, root?: string) {
   const shot = (r: Awaited<ReturnType<typeof renderer>>) => r.shot(clear ? "png" : "jpeg")
   let failure: Error | null = null
   const fail = (e: Error) => void (failure ??= e)
+  job.stop = () => fail(new Error("Stopped."))
   let captured = 0
   /** One renderer's part, captured frame by frame into `put`. A renderer that dies part way is started again and
       carries on from the first frame it hadn't captured (twice at most): a crash costs seconds, not the export. */
@@ -703,6 +710,10 @@ export function studio(): Plugin {
         return json(res, 200, { id: job.id })
       }
       const job = id ? jobs.get(id) : undefined
+      if (what === "jobs" && job && req.method === "DELETE") {
+        job.stop?.()
+        return json(res, 200, { ok: true })
+      }
       if (what === "jobs" && job && !extra) return json(res, 200, { state: job.state, frame: job.frame, total: job.total, error: job.error, checks: job.checks, cached: job.cached })
       if (what === "jobs" && job && extra === "file" && job.state === "done" && job.file) return sendFile(req, res, job.file, job.type!, `studio.${job.ext}`)
       // the film's best stills, for a thumbnail

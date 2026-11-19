@@ -16,4 +16,7 @@ export const params = {
   tagline: "Privacy Shouldn't Be Optional",
   url: "arcaneprivacy.com",
   unit: "SOL",
+  screen1: "",
+  screen2: "",
+  screen3: "",
 };

@@ -479,4 +479,139 @@ const { explain } = await import("../src/trouble.ts");
   assert.ok(!explain(new Error("Your key's free tier allows 20 requests a day")).detail.startsWith("No provider"));
 }
 
+// the film maker: every film template has a contract naming only slots it has; the picker puts an AI product on the AI
+// template and a payments app on a money one; the checks catch the reference film's words, invented figures and its names
+{
+  const { CONTRACTS, contractFor } = await import("../src/studio/contracts.ts");
+  const { pick, checkLines, linesRequest, applySceneOps } = await import("../src/studio/maker.ts");
+  const { fitText } = await import("../src/studio/shots.ts");
+  assert.equal(CONTRACTS.length, 12);
+  for (const c of CONTRACTS) assert.ok(c.idea && Object.keys(c.slots).length && c.fits.length, c.film);
+  const brief = (kind, features, more = {}) => ({ product: "Nova", kind, oneLiner: "", audience: "", problem: "", oldWay: "", promise: "", features: features.map((name) => ({ name, benefit: "" })), proof: [], usp: "", tone: "", banned: [], cta: "Try it", by: "rules", updated: "", ...more });
+  const T = (id, film, size = "16x9", seconds = 12) => ({ t: { id, film, name: id, size, seconds, screens: [] }, c: contractFor(film) });
+  const list = [T("liquid", "film-liquid"), T("horizon", "film-horizon", "16x9", 23.6), T("glide", "film-glide"), T("quad", "film-quad", "16x9", 4.4)];
+  assert.equal(pick(brief("an AI assistant agent that answers anything", ["Ask", "Plan"]), list)[0].id, "liquid");
+  assert.equal(pick(brief("a payments wallet app for sending money", ["Send", "Request", "Split"]), list)[0].id, "horizon");
+  // no real number: the template that needs one says so
+  assert.ok(pick(brief("payments app", ["Send"]), list).find((p) => p.id === "quad").reasons.some((r) => r.includes("real number")));
+  const slots = [
+    { key: "name", kind: "text", label: "Name", example: "Arcane", pieces: 1, chars: [8], words: [2] },
+    { key: "orbit", kind: "text", label: "Under the comet", example: "Everything Anonymous|Consolidated Instantly", pieces: 2, chars: [25, 28], words: [3, 3] },
+    { key: "switch", kind: "text", label: "Last panel", example: "Everything Private|Switch To Arcane", pieces: 2, chars: [23, 20], words: [3, 4] },
+  ];
+  const c = contractFor("film-horizon");
+  const probs = checkLines({ name: "Nova", orbit: "Everything Anonymous|Consolidated Instantly", switch: "Save 40% today|Switch To Arcane" }, slots, c, brief("payments", ["Send"]), fitText);
+  assert.ok(probs.some((p) => p.key === "orbit" && p.text.includes("reference film")));
+  assert.ok(probs.some((p) => p.key === "switch" && p.text.includes("40%")));
+  assert.ok(probs.some((p) => p.key === "switch" && p.text.includes("Arcane")));
+  assert.equal(checkLines({ name: "Nova", orbit: "Private By Default|Settled In Seconds", switch: "Everything Yours|Switch To Nova" }, slots, c, brief("payments", ["Send"]), fitText).filter((p) => p.level === "error").length, 0);
+  const req = linesRequest(brief("payments", ["Send"]), c, slots);
+  assert.deepEqual(req.schema.schema.required, ["name", "orbit", "switch"]);
+  assert.ok(req.messages[1].content.includes("old-way") === false && req.messages[1].content.includes("benefit"));
+  assert.deepEqual(applySceneOps([{ duration: 1 }, { duration: 2 }, { duration: 3 }], [{ op: "drop", scene: 0 }, { op: "retime", scene: 0, seconds: 5 }]), [{ duration: 5 }, { duration: 3 }]);
+  // a contract's reference names are caught whole, case and all
+  assert.ok(checkLines({ name: "Nova", orbit: "Swap On Magic Eden|Settled In Seconds", switch: "Everything Yours|Switch To Nova" }, slots, c, brief("payments", ["Send"]), fitText).some((p) => p.text.includes("Magic Eden")));
+
+  // the product in the template: its palette over the template's, its screens by feature
+  const { toneMap, resolve, tones } = await import("../src/animations/_film/tone.ts");
+  const { themeFor, storyScreens } = await import("../src/studio/maker.ts");
+  const paper = { ground: "#f5f4f0", ink: "#141414", accent: "#8ea8f0" };
+  const dark = toneMap(["f5f4f0", "141414", "ffffff", "e4e3de", "8ea8f0", "f2c94c", "ff5f57"], paper, { bg: "#000000", ink: "#ededed", accent: "#ff3366", fit: "product" });
+  assert.equal(dark.f5f4f0, "#000000"); // the ground is the product's
+  assert.equal(dark["141414"], "#ededed"); // so is the ink
+  assert.ok(parseInt(dark.ffffff.slice(1, 3), 16) > 0 && parseInt(dark.ffffff.slice(1, 3), 16) < 40); // a lifted card: just off the ground
+  assert.ok(parseInt(dark.e4e3de.slice(1, 3), 16) < 60); // a line near the ground stays near it
+  assert.equal(dark.f2c94c, "#f2c94c"); // a colour outside the accent's family stays
+  assert.ok(dark["8ea8f0"] !== "#8ea8f0" && parseInt(dark["8ea8f0"].slice(1, 3), 16) > parseInt(dark["8ea8f0"].slice(5, 7), 16)); // the accent turns red
+  const acc = toneMap(["f5f4f0", "8ea8f0"], paper, { bg: "#000000", ink: "#ededed", accent: "#ff3366", fit: "accent" });
+  assert.equal(acc.f5f4f0, "#f5f4f0"); // "accent" keeps the template's ground
+  Object.assign(tones, { f5f4f0: "#000000" });
+  assert.equal(resolve("0 0 0 1px var(--t-f5f4f0, #f5f4f0), var(--t-111111, #111111)"), "0 0 0 1px #000000, #111111");
+  Object.assign(tones, { sans: "\"Inter\"" });
+  assert.equal(resolve("font-family:var(--t-sans, &quot;Geist&quot;)", true), "font-family:&quot;Inter&quot;"); // markup stays markup
+  for (const k of Object.keys(tones)) delete tones[k];
+  const kit = { id: "k", name: "Nova", updated: "", words: { name: "Nova", tagline: "", hook: "", features: [], proof: "", cta: "" }, brand: { ground: "#000000", ink: "#ededed", text: "Inter", display: "Geist" }, files: [
+    { id: "a", name: "home.png", type: "image/png", size: 1, url: "/a", w: 1440, h: 900, kind: "desktop" },
+    { id: "b", name: "shaders.png", type: "image/png", size: 1, url: "/b", w: 1440, h: 900, kind: "desktop" },
+    { id: "c", name: "studio.png", type: "image/png", size: 1, url: "/c", w: 1440, h: 900, kind: "desktop", shows: "The editor with a phone mockup" },
+  ] };
+  const th = themeFor(kit, contractFor("film-horizon"));
+  assert.equal(th.accent, "#ededed"); // black and white: the ink is the accent
+  assert.equal(th.fit, "accent");
+  assert.ok(th.fonts[0].includes("family=Inter") && th.fonts.length === 1); // Geist is in the frame already
+  const scr = [{ key: "dashboard", kind: "screen", label: "Home screen", hint: "", aspect: 1.6, shots: [] }, { key: "screen1", kind: "screen", label: "Page 1", aspect: 1.5, shots: [] }, { key: "screen2", kind: "screen", label: "Page 2", aspect: 1.5, shots: [] }];
+  const got = storyScreens(brief("a film tool", ["Studio", "Shaders"]), kit, scr);
+  assert.deepEqual([got.dashboard, got.screen1, got.screen2], ["image:/a", "image:/c", "image:/b"]);
+}
+
+// the director: a spine kept to its rules, a film timed to the length on the tempo's beats
+{
+  const { fixSpine, buildFilm, productShare } = await import("../src/studio/screenplay.ts");
+  const { DIRECTIONS } = await import("../src/studio/artist.ts");
+  const b = { product: "Nova", kind: "app", oneLiner: "", audience: "", problem: "", oldWay: "", promise: "Ship faster", features: [], proof: [], usp: "", tone: "", banned: [], cta: "Try Nova", by: "ai", updated: "" };
+  const carriers = [{ id: "words", kind: "words", what: "" }, { id: "logo", kind: "logo", what: "" }, { id: "screen:a", kind: "device", file: "a", what: "" }, { id: "clip:b", kind: "clip", file: "b", seconds: 9, what: "" }];
+  const sp = fixSpine({ beats: [{ role: "hook", say: "Your launch video is already out of date and nobody noticed", carrier: "words", seconds: 3 }, { role: "proof", say: "Drop in screens", carrier: "screen:a", seconds: 4 }, { act: "show", say: "Again", carrier: "screen:a", seconds: 4 }, { role: "proof", say: "Watch it", carrier: "clip:b", seconds: 4 }, { role: "proof", say: "Ghost", carrier: "screen:nope", seconds: 4 }] }, carriers, b, 30);
+  assert.equal(sp.beats[0].say, "Your launch video is already out of date"); // cut at nine words, no dangling “and”
+  const { tidy } = await import("../src/studio/screenplay.ts");
+  assert.equal(tidy("Updating product videos by hand takes too long.", 9), "Updating product videos by hand takes too long."); // whole when it fits
+  assert.equal(tidy("Every screen change means a manual edit, again and again and again", 9), "Every screen change means a manual edit"); // cut where it breaks
+  assert.equal(sp.beats.filter((x) => x.carrier === "logo").length, 2); // the mark at the turn and at the end
+  assert.equal(sp.beats.at(-1).carrier, "logo");
+  assert.equal(sp.beats.at(-1).role, "cta"); // the close: the name alone, at most a quarter of the film
+  assert.ok(sp.beats.at(-1).seconds <= 30 * 0.25 && !sp.beats.at(-1).sub);
+  assert.ok(sp.beats.every((x) => x.buys)); // every beat buys something
+  assert.equal(sp.beats.filter((x) => x.carrier === "screen:a").length, 1); // a screen used once
+  assert.ok(Math.abs(sp.beats.reduce((a, x) => a + x.seconds, 0) - 30) < 1e-6);
+  assert.ok(productShare(sp, carriers) > 0.2);
+  const m = { world: "/w.mp4", mark: "/m.mp4", shapes: {}, screen: (f) => `/s/${f}`, clip: (f, at, d) => `/c/${f}@${at.toFixed(2)},${d.toFixed(2)}.mp4` };
+  const built = buildFilm(sp, carriers, DIRECTIONS[0], m, { name: "Nova" });
+  const durs = built.script.shots.map((x) => x.dur);
+  assert.ok(Math.abs(durs.reduce((a, d) => a + d, 0) - 30) < 0.05, `${durs}`); // the length asked
+  assert.ok(durs.every((d, i) => d >= (built.meanings[i].shows === "the claim in type" ? 1.09 : 1.99))); // a claim is read in about a second, every other shot gets two
+  assert.ok(built.script.shots.every((x) => x.layers[0].name === "World")); // one world under every shot
+  assert.ok(built.script.shots.every((x) => x.cut === "cut")); // hard cuts: nothing fades between beats
+  assert.ok(built.script.shots.every((x) => (x.layers ?? []).every((l) => l.kind !== "text" || !l.exit))); // titles leave on the cut
+  const proofAt = built.meanings.findIndex((x) => x.role === "proof" && x.shows === "the claim in type");
+  assert.ok(proofAt >= 0 && built.meanings[proofAt + 1].role === "proof" && !built.meanings[proofAt + 1].says); // say it, then show it
+  assert.equal(built.meanings.length, built.script.shots.length);
+  const clip = built.script.shots.flatMap((x) => x.layers).find((l) => l.name === "Recording");
+  const i = built.script.shots.findIndex((x) => x.layers.includes(clip));
+  assert.ok(clip.src.includes(`@${built.starts[i].toFixed(2)}`)); // a recording placed at its shot's start
+}
+
+// the cross-checker: motionmaxxing's gates on a composition
+{
+  const { lintFilm, notesOf } = await import("../src/studio/crosscheck.ts");
+  const T = (text, y, o = {}) => ({ kind: "text", text, size: 5, box: { x: 0.5, y, w: 0.8 }, entry: { at: 0.1, dur: 0.6 }, ...o });
+  const m = (role) => ({ role, buys: "Buys trust: the viewer sees it done.", says: "", carrier: "words", shows: "" });
+  const bad = { scenes: [
+    { name: "Hook", duration: 3, layers: [T("Meet Nova, the future of notes", 0.5)], meaning: m("hook") },
+    { name: "Proof", duration: 4, transition: "dissolve", layers: [T("Drop in screens", 0.12), { kind: "image", name: "Recording", box: { x: 0.5, y: 0.6, w: 0.4 } }], meaning: m("proof") },
+    { name: "Proof 2", duration: 4, transition: "blur", layers: [{ kind: "device" }], camera: { zoom: 0.8 } },
+    { name: "End", duration: 6, layers: [T("Nova", 0.7), T("nova.app", 0.95, { size: 1, font: "mono" })], meaning: m("cta") },
+  ] };
+  const f = lintFilm(bad);
+  const has = (gate, scene) => f.some((x) => x.gate === gate && (scene === undefined || x.scene === scene));
+  assert.ok(has("copy", 0)); // slogan copy
+  assert.ok(has("deck layout", 1)); // a title over the product
+  assert.ok(has("G1 proof readable", 1) && has("G1 proof readable", 2)); // a small recording, a small device
+  assert.ok(has("G3 end card", 3)); // a long end card
+  assert.ok(has("G5 page chrome", 3)); // an edge label, an address in the close
+  assert.ok(has("cuts")); // fades between beats
+  assert.ok(has("meaning", 2)); // a shot with no meaning
+  assert.ok(notesOf(f).startsWith("Shot")); // notes for the director, fails first
+  const good = { scenes: [
+    { name: "Hook", duration: 4, layers: [T("Updating every film by hand takes days", 0.5)], meaning: m("hook") },
+    { name: "Claim", duration: 1.4, layers: [T("Drop in your screens", 0.5)], meaning: m("proof") },
+    { name: "Product", duration: 4, layers: [{ kind: "image", name: "Recording", box: { x: 0.5, y: 0.5, w: 0.84 } }], meaning: m("proof") },
+    { name: "End", duration: 2.2, layers: [T("Nova", 0.74, { entry: { at: 0.35, dur: 0.6 } })], meaning: m("cta") },
+  ] };
+  assert.deepEqual(lintFilm(good).filter((x) => x.level === "fail"), []);
+  assert.ok(lintFilm({ scenes: good.scenes.map((x) => ({ ...x, layers: x.layers.filter((l) => l.kind === "text") })) }).some((x) => x.gate === "product")); // no product on screen
+  const { fixSpine: fix2 } = await import("../src/studio/screenplay.ts");
+  const cs = [{ id: "words", kind: "words", what: "" }, { id: "logo", kind: "logo", what: "" }, { id: "clip:x", kind: "clip", file: "x", what: "a recording of someone using it: sync screens across every film" }, { id: "shape:core", kind: "shape", what: "a shape" }];
+  const sp2 = fix2({ beats: [{ role: "proof", say: "Sync your screens everywhere", carrier: "shape:core", seconds: 5 }] }, cs, { product: "Nova", promise: "", oneLiner: "", cta: "Try" }, 20);
+  assert.equal(sp2.beats.find((x) => x.role === "proof").carrier, "clip:x"); // a proof moved onto the product's recording
+}
+
 console.log("check: ok");

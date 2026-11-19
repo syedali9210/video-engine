@@ -22,6 +22,7 @@ export default {
     size: "16x9",
     end: 4.37,
     look: "pop",
+    tone: { ground: "#000000", ink: "#ffffff", accent: "#3138f0" },
     shots: [
       { name: "The feature", at: 0, role: ["hook", "feature"], energy: 3, enter: "cut", exit: "cut" },
       { name: "Your name", at: 1.58, role: ["logo", "product"], energy: 3, enter: "cut", exit: "cut" },

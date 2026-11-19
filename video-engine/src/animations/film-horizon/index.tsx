@@ -2,7 +2,7 @@
 // 3.1, 5.6, 9.87, 11.63, 13.0, 15.87, 18.7, 21.1 s), its framing and its navy-and-periwinkle light are the
 // reference's; the product, its words and its accent are params. The panels are drawn here, in the reference's glass.
 import type { CSSProperties, ReactNode } from "react";
-import { Cursor, Stage, alpha, at, back, clamp, expo, fill, hexMix, inOut, lerp, out, rng, seg, useClock, useFonts, useWebFonts } from "../_film/kit";
+import { Cursor, Shown, Stage, alpha, at, back, clamp, expo, fill, hexMix, inOut, lerp, out, rng, seg, useClock, useFonts, useWebFonts } from "../_film/kit";
 import { params as defaults } from "./params";
 
 type P = typeof defaults;
@@ -120,6 +120,7 @@ const glass = (o: CSSProperties = {}): CSSProperties => ({
 const Label = ({ children, style }: { children: ReactNode; style?: CSSProperties }) => <div style={{ fontSize: 13, letterSpacing: "0.14em", textTransform: "uppercase", color: "rgba(220,225,255,.5)", ...style }}>{children}</div>;
 
 function SendPanel({ p, a, press }: { p: P; a: string; press: number }) {
+  if (p.screen1) return <Shown pick="screen1" src={p.screen1} w={1000} style={glass({ transform: `scale(${1 - press * 0.02})` })} />;
   return (
     <div style={{ ...glass({ width: 900, height: 940, padding: "40px 46px", boxSizing: "border-box" }) }}>
       <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 26, fontWeight: 600 }}>
@@ -163,6 +164,7 @@ function SendPanel({ p, a, press }: { p: P; a: string; press: number }) {
 }
 
 function ImportPanel({ p, a }: { p: P; a: string }) {
+  if (p.screen2) return <Shown pick="screen2" src={p.screen2} w={900} style={glass()} />;
   return (
     <div style={{ ...glass({ width: 860, height: 660, padding: "40px 48px", boxSizing: "border-box" }) }}>
       <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 24, fontWeight: 600 }}>
@@ -193,6 +195,7 @@ function Ledger({ p }: { p: P }) {
     ["Send", "Magic Eden", "2vR…hN8", "-3.200"],
     ["Recv", "Friend", "7kL…4JE", "+2.300"],
   ];
+  if (p.screen3) return <Shown pick="screen3" src={p.screen3} w={860} style={glass()} />;
   return (
     <div style={{ ...glass({ width: 760, height: 740, padding: "40px 44px", boxSizing: "border-box" }) }}>
       <Label style={{ display: "flex", alignItems: "center", gap: 10 }}>

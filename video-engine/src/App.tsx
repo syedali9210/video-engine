@@ -23,6 +23,7 @@ import { Back, BarBack, InBar, Sidebar, SPACES as PLACES, type Space } from "./s
 import { RenderCard } from "./RenderCard";
 import { Loading } from "./Thinking";
 import { CreativesPage, FilmsPage } from "./Galleries";
+import { ShadersPage } from "./shader/ShadersPage";
 import { barrelRoll, burstAt, rain, useKonami } from "./fun";
 import { Home } from "./Home";
 import { ReviewSheet } from "./studio/ReviewSheet";
@@ -103,8 +104,11 @@ type CanvasBrief = { name?: string; kicker?: string; tagline?: string; screen?: 
 type EngineApi = {
   templates: () => { id: string; name: string; summary: string; shots: number; seconds: number }[];
   film: (o: FilmBrief) => Promise<{ template: string; name: string; scenes: number; seconds: number }>;
-  /** hands the film in the Studio to the renderer: the job's id (GET /__studio/jobs/:id, then /file) */
-  render: (kind?: ExportKind) => Promise<string>;
+  /** hands the film in the Studio to the renderer: the job's id (GET /__studio/jobs/:id, then /file); a draft is half
+      size at 30 fps, encoded fast, to look at */
+  render: (kind?: ExportKind, o?: { draft?: boolean; stills?: boolean }) => Promise<string>;
+  /** opens a composition in the Studio as it is (the film maker's, server/maker.ts) */
+  load: (c: Comp) => void;
   canvas: (o: CanvasBrief) => Promise<{ doc: CanvasDoc; z: string }>;
 };
 type PhoneSheet = "layers" | "edit" | "export";
@@ -1122,7 +1126,17 @@ export default function App() {
       setCsel({ scene: scenes[0].id });
       return { template: t.id, name: t.name, scenes: scenes.length, seconds: +total({ ...made, scenes }).toFixed(1) };
     },
-    render: async (kind = "video") => submitJob(kind, await renderConfig(kind), SIZES.find((x) => x.id === comp.size) ?? SIZES[0], comp.fps),
+    render: async (kind = "video", o = {}) => {
+      const size = SIZES.find((x) => x.id === comp.size) ?? SIZES[0];
+      // stills: half the size at 2 frames a second, enough to judge every shot (and for the critic to read its words)
+      if (o.stills) return submitJob(kind, await renderConfig(kind), { w: Math.round(size.w / 2 / 2) * 2, h: Math.round(size.h / 2 / 2) * 2 }, 2, true);
+      return o.draft ? submitJob(kind, await renderConfig(kind), { w: Math.round(size.w / 2 / 2) * 2, h: Math.round(size.h / 2 / 2) * 2 }, 30, true) : submitJob(kind, await renderConfig(kind), size, comp.fps);
+    },
+    load: (c) => {
+      setComp(() => c);
+      setCsel({ scene: c.scenes[0]?.id });
+      edit("films");
+    },
     canvas: async (o) => {
       const doc = productCanvas({ anim: o.screen && byId(o.screen) ? o.screen : id, overrides, name: o.name, kicker: o.kicker, tagline: o.tagline, picture: o.picture });
       const baked = bake({ ...doc, origin: o.origin ?? location.origin });
@@ -1133,7 +1147,8 @@ export default function App() {
     (window as unknown as { __engine: EngineApi }).__engine = {
       templates: () => api.current.templates(),
       film: (o) => api.current.film(o),
-      render: (kind) => api.current.render(kind),
+      render: (kind, o) => api.current.render(kind, o),
+      load: (c) => api.current.load(c),
       canvas: (o) => api.current.canvas(o),
     };
   }, []);
@@ -1638,7 +1653,7 @@ export default function App() {
   if (rail && space === "product")
     return withRail(
       <>
-        <ProductPage key={productKey} templates={TEMPLATES.filter((t) => t.film)} onMake={(t, kit, lines) => (edit("films"), void applyTemplate(t, kit, lines))} onPlan={(script, kit, values) => (edit("films"), applyPlan(script, kit, values))} onBatch={batchJob} />
+        <ProductPage key={productKey} templates={TEMPLATES.filter((t) => t.film)} onMake={(t, kit, lines) => (edit("films"), void applyTemplate(t, kit, lines))} onPlan={(script, kit, values) => (edit("films"), applyPlan(script, kit, values))} onBatch={batchJob} onOpenFilm={(c) => api.current.load(c as Comp)} />
         {overlays}
       </>,
     );
@@ -1682,6 +1697,23 @@ export default function App() {
           onArtist={() => (edit("films"), setArtistOpen(true))}
           onReview={() => setReviewOpen(true)}
           onSwitch={() => pickAnim("Your product's screen", openAnim)}
+        />
+        {overlays}
+      </>,
+    );
+  // a shader video, full frame at the back of the scene you're on, then the film to see it in
+  if (space === "shaders")
+    return withRail(
+      <>
+        <ShadersPage
+          brand={comp.brand?.accent ?? accents[0]}
+          onUse={(url, aspect) => {
+            const size = SIZES.find((x) => x.id === comp.size) ?? SIZES[0];
+            const w = Math.max(1, aspect / (size.w / size.h));
+            setComp((c) => ({ ...c, scenes: c.scenes.map((x) => (x.id === cscene.id ? { ...x, layers: [{ id: uid(), kind: "image" as const, src: url, file: "Shader video", aspect, box: { x: 0.5, y: 0.5, w }, radius: 0, enter: "none" as const }, ...x.layers] } : x)) }));
+            edit("films");
+            say("The video is at the back of this scene");
+          }}
         />
         {overlays}
       </>,

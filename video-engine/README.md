@@ -22,6 +22,12 @@ The sidebar on the left holds **New**, Search (Ctrl K), the Inbox and the places
 - **Films**: continue your film, or start from a template by kind (product launch, feature, demo, brand, social, device
   mockup). Opening one goes into the Studio.
 - **Creatives**: continue your canvas, or start from a layout. Opening one goes into the Canvas.
+- **Shaders**: moving gradients (ShaderGradient's look), gradients on 3D shapes (stacked slabs, glass discs, pills, an
+  orb, a ring, bento tiles), logos and words in liquid metal, and React Three Fiber scenes, rendered as videos that
+  loop. *Make new ones* builds them by rule from a mood or your brand's colour; open one to tune it live, render it,
+  then download it or *Use in film* (it goes full frame at the back of the scene you're on). Rendering needs the dev
+  server; the rules, the placement guide for shape gradients and the pipeline are in
+  [src/shader/SHADERS.md](src/shader/SHADERS.md).
 - **Lab** (on your machine only, see below).
 
 Your product's screen on the devices is a component from the library (`src/animations/`): **Switch** on Films and
@@ -354,6 +360,133 @@ Each says why and which rule. They come by the rules (no AI), or *Ask Gemini* fo
 
 Or put `GEMINI_API_KEY=…` in `.env.local` at the project's root yourself. A night is a handful of requests: a search, one to three films watched at a low resolution (a few thousand tokens each), then the proposals (about 40k tokens), inside the free tier (AI Studio shows your limits). Searching the web has a quota of its own, and a free key may have none. Without it, the lab studies the next film on its own list, `src/studio/lab/films.json`: official launch films, each checked with YouTube, and you can add more. When you ask for films about something, it asks the model's memory instead, keeping only addresses that exist on YouTube and whose real titles match, and it says what it found. A pasted film is always watched. The lab keeps its proposals, films and effects in `.engine-data/lab/`. `GEMINI_BASE_URL` points it at another OpenAI-compatible endpoint. Watching and searching call Gemini's native API at the same address, without its `/openai`.
 
+## The film maker
+
+A product's launch film from one of the film templates, made by rule with the fewest AI calls (Product → *The film
+maker*, the `/__film/*` routes in `server/maker.ts`, the MCP's `make_film` and `edit_film`).
+
+1. **The brief, once per product** (one call, then kept): what it is, who it's for, the pain it ends, how people do it
+   today, the change it makes, its features each with what it lets you do, real proof only, the tone, the call, the
+   address, and where each was read from. You can correct it; the next films read yours.
+2. **The pick** (code, no tokens): every film template has a **story contract** (`src/studio/contracts.ts`): its idea,
+   the story it tells, the products it suits and doesn't, its tone and pace, what it needs (features, a real number,
+   the site), each shot's job, and what every line *means* (the pain, the old way, the promise, feature 2's verb, the
+   call…) with how to write it. The picker scores the templates against the brief and says why.
+3. **The lines, one call**: every line of the chosen template, each with its meaning and limits; a second call only
+   for lines that didn't fit. The name and the address are filled from the brief by code.
+4. **The checks** (code): each line fits; nothing is still the reference film's words; no figure, price or address the
+   brief doesn't have; none of the reference film's brand; no hype words, none the brand bans.
+5. **Render** by the Studio itself (a draft at half size and 30 fps, or the final), **the critic** (stills of the
+   draft read against the brief; lines it flags rewritten), **a note in plain words** to change it (“make the hook
+   punchier”, “use the glide template”, “9:16”), and *Keep* / *Pass*, which the picker learns from.
+
+**The template wears the product.** A template is the reference film's choreography; everything it shows is the
+product's:
+
+- **Colours and type.** At build, every colour a film's code names becomes a variable (`vite.config.ts`
+  `filmTones`), and `src/animations/_film/tone.ts` maps the template's palette onto the product's brand (read off
+  its site: *Read the site* in the kit). Its ground becomes the product's ground, its ink the product's ink, and the
+  greys in between land in between. Cards lifted off the ground become the product's surface, and the accent's family
+  turns to the product's accent; a black-and-white brand takes its ink as the accent. The contract says how far:
+  `theme: "product"`, or `"accent"` for a template whose look is the point (deep space, a night studio). In the
+  panel: *Colours and type*.
+- **Its screens, by the story.** The shot that opens on the app gets the product's home screen. Each later screen
+  gets the screen of the feature it carries (the brief's features in order, matched to the kit's files by name and by
+  what the reader says each shows), not just whatever has the right shape.
+- **No reference product left.** Every panel a template drew of its reference product's interface takes the
+  product's own screen when there is one: Horizon's send, import and ledger panels, Mosaic's made page and mark,
+  Pop's four cards, Verbs' window, Spotlight's editor and the faces under its words, the Sketch reel's app. Each
+  contract also lists the reference's names (`refs`: its product, its models, the brands in its interface). A line
+  still holding one fails the checks, and a line that held the reference's name gets room for this product's.
+- **A score cut to it** (`server/music.ts`, synthesized, nothing licensed). There are four moods (calm, bright,
+  driving, dark), chosen from the contract's pace and tone. The tempo is picked so the template's cuts land on its
+  beats, the band plays as much as each shot's energy asks, and each cut gets a hit, a whoosh or a riser. The last shot
+  rings out on a bar at the film's end. It's made once per film shape (about 2 s) and kept in `.engine-data/music`.
+  In the panel: *Music*.
+- **Versions.** Every edit is a new version; *Go back* restores an earlier one (its template, size and lines) as a
+  new version, at no cost.
+- **Longer films from several templates** (`POST /__film/sequence { kit, parts: [{ template, shots?, screens? }],
+  length? }`). Each part keeps the shots you name, and its lines are written in parallel (only the lines those shots
+  show). All parts share one theme (the product's, ground and all) and one score. Screens carry on from part to part
+  (or are named, as a director casts them), the seams dissolve, and the last shot holds to the length. A sequence
+  can't be edited yet: change its parts and make it again (the parts' lines come back from the cache).
+  Cast screens that fill the camera's path: Glide's macro crosses the screen's middle and bottom, so a screen with an
+  empty canvas there films as a white blur.
+
+**Directed films** (*Direct a film*, `POST /__film/direct`, the MCP's `direct_film`). These start from a story, not a
+template (`src/studio/screenplay.ts`):
+
+1. **The spine, one call.** The writer gets the brief and what can carry each beat: the line alone, the liquid mark,
+   each of the product's screens and recordings as the reader saw them, and the shape metaphors. It returns four acts:
+   - the hook: the pain, in the audience's words
+   - the turn: the product arriving as its mark
+   - the show: three or four moments of the product working, each an action and what you get, on the screen or
+     recording that shows it
+   - the payoff: the promise again, then the mark and the call
+
+   Code holds it to the rules: lines of at most 7 words, each screen used once, the mark exactly twice, the length.
+2. **One world.** A shader field in the brand's colours runs under every shot. Exports seek every video to the film's
+   clock, so it flows through the cuts. The liquid mark is cut from the logo's own lines and screen-blended over the
+   world. Shapes stand for ideas (a fanning stack: every format). Screens go on 3D devices, and recordings go on cards,
+   placed so they start on the action when their shot starts. The art direction (the Artist's) sets the type, the
+   entrances, the tempo every beat is cut on, and the cuts between acts. A score is cut to it.
+3. **The scorecard** (`POST /__film/review`, or `review: true`). Stills of every shot are scored 1–5 on story,
+   product, look, words and carriers. While a score is under 4, the critic's notes go into the next story call (two
+   rounds at most), and the best film is kept.
+4. **Recordings of the product** come from the kit's tours (`POST /__kit/tour`): the running app driven through a flow
+   with real clicks and a drawn cursor, filmed at 2×.
+
+**motionmaxxing** (Tejas Makwana's skill, Apache-2.0, vendored whole in `public/motionmaxxing` with its LICENSE and
+NOTICE, its bundled GSAP 3.12.5 under GreenSock's own license; only `docs/media` left out). The director follows its
+rules, measured on 53 frame-accurate professional films:
+- every beat buys one belief, in four roles (hook, turn, proof, cta)
+- proofs are a claim in type, then a hard cut to the product performing it, big, with nothing over it
+- cuts are hard and on motion, and almost nothing fades
+- the mark crashes in from oversize
+- the end card is the name alone, at most a quarter of the film, holding at most 1.4 s
+- no page chrome, no slogans
+
+Its runtime plays inside the renderer: a motion.js film (`window.__seek`) is a library animation with
+`public/motionmaxxing-driver.js`, which seeks it every frame from the page's clock. So the export's stepped clock
+renders it frame for frame; *Motion runtime demo* is its own demo film.
+
+**The generator** (`server/generate.ts`, `GET /__film/assets`, `POST /__film/asset { kit, kind, id? }`) makes, for the
+product's brand:
+- the world: a grainy shader field
+- the mark: the logo's own lines, picked out of its tile, in liquid metal
+- six shapes that each stand for one idea: formats (fanning slabs), layers (glass discs), outputs (tiles), steps
+  (pills), core (an orb), loop (a ring)
+
+The director is offered all of them, and only the ones a beat uses are rendered (about a minute each the first time,
+then kept).
+
+**Meaning:** every shot keeps what it's for (`scene.meaning`: its role, the belief it buys, its words, what carries
+it, what it shows). A directed film writes it from its spine. A template film takes its shot's role and its job from
+the template's contract.
+
+**The cross-checker** (`src/studio/crosscheck.ts`, and `POST /__film/review`) runs two passes:
+1. **Code, free:** motionmaxxing's gates on the composition. These are the end card (G3), page chrome and addresses in
+   the close (G5), a title over the product (deck layout), the product too small to read (G1), fades between beats,
+   slogan copy, pinned objects, and shots that buy nothing.
+2. **A look:** one still a shot, each checked against what it's meant to show, and the film scored.
+
+Failed gates and shots off their meaning become the director's notes, and with `review: true` it directs again (two
+rounds at most).
+
+**Quick look:** *Quick look* (`POST /__film/render { stills: true }`) renders two frames a second at a quarter size.
+That's every shot of a 30 s film in under a minute, where a draft takes about two. The kit reader now reads eight
+pictures a call instead of one, and a cut-off AI reply is asked again with more room and never cached.
+
+Every step is logged with its time and tokens (`.engine-data/films/runs.jsonl`, and on each film). Measured on the
+engine's own kit: the brief 1.4k tokens, a film's lines 1.0–1.7k (answers are cached: the same request again costs
+nothing), the critic about 6.6k (optional), reading the kit's 9 pictures 11.6k once; a film's words in about a
+minute, an 8.3 s draft in about 70 s, its 2048² 60 fps final in about 150 s. A template without a contract gets one drafted
+(`POST /__film/contract`); a draft never overrides a shipped or approved one.
+
+The Work API (the AI the film work runs on): when the model picked in Settings can't take a request (one that only
+answers Google's Interactions API, or has no eyes) or is busy or out of its day's requests, it asks the provider's
+other models in turn (`server/work.ts`), and every answer reports its tokens.
+
 ## Claude (MCP server)
 
 `mcp/server.mjs` lets Claude (Claude Code, Claude Desktop, any MCP client) make a film or a canvas of a codebase in one call. Claude gives the request and waits. The engine does the work and answers with where the file is, so no tokens go on the making.
@@ -368,6 +501,10 @@ For Claude Desktop, add `"animation-engine": { "command": "node", "args": ["…/
 | --- | --- |
 | `make_video` | Reads the project, captures the running app (`url`, optional `paths`), builds the film (the Artist directs it from `brief` and `kind`, or a lab script named in `template`), renders it and saves the MP4. Options: `size` (9x16 for Reels), `fps`, `features`, `cta`, `out`. |
 | `make_interactive` | The same reading and capture, then a canvas: the name, its line, and the app's screen in an iPhone that turns to the pointer. Saves the JSON and returns a preview link and the two lines to embed it. |
+| `make_shader_video` | A looping shader video: `kind` (gradient, shape, liquid, scene) and a `preset`, or a new one made by the rules from `mood` or `brand`; `colors`, `text` or `logo` (liquid), `size`, `fps`, `seconds`, `transparent` (ProRes with alpha), `out`. |
+| `list_shader_presets` | The shader presets by kind. |
+| `make_film` | A film from a film template for a product (`project` and `url`, or a product `kit`): the brief, the pick (`template`: `auto` or an id), every line written and checked, rendered (`draft` for a quick look, `critic` to review a draft first) and saved, with its cost. |
+| `edit_film` | Changes a `make_film` film from a `note` in plain words, and renders it again. |
 | `job_status` | Follows a render started with `wait: false` and saves it when it's done. |
 | `list_templates` · `engine_status` | The film templates (with the lab's approved versions); whether the engine and Chrome are ready. |
 

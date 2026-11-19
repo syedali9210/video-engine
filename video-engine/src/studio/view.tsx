@@ -988,24 +988,20 @@ const SceneView = forwardRef<
           {textBody({ ...l, text: fillText(l.text) })}
         </p>
       )
-    } else if (l.kind === "image")
+    } else if (l.kind === "image") {
+      const css: CSSProperties = { aspectRatio: l.aspect, objectFit: "cover", borderRadius: `calc(${l.radius}cqw * var(--vz, 1))`, ...(l.hairline ? hairline(onDark) : {}) }
+      // a video (a shader video, a clip) plays looped; an export seeks it to each frame's time
       inner = (
         <div className="relative">
-          <img
-            src={resolve.image(l.src)}
-            alt=""
-            draggable={false}
-            className="block w-full"
-            style={{
-              aspectRatio: l.aspect,
-              objectFit: "cover",
-              borderRadius: `calc(${l.radius}cqw * var(--vz, 1))`,
-              ...(l.hairline ? hairline(onDark) : {}),
-            }}
-          />
+          {/\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(l.src) ? (
+            <video src={resolve.image(l.src)} autoPlay={!resolve.stepped} muted loop playsInline preload="auto" className="block w-full" style={css} />
+          ) : (
+            <img src={resolve.image(l.src)} alt="" draggable={false} className="block w-full" style={css} />
+          )}
           {selection}
         </div>
       )
+    }
     else if (l.kind === "callout")
       // the label and its line are drawn by the scene's labels; this box is what the stage picks and drags
       inner = <div style={{ height: "2.4cqw" }} />
@@ -1049,7 +1045,7 @@ const SceneView = forwardRef<
           if (x) flats.current.set(l.id, x)
           else flats.current.delete(l.id)
         }}
-        style={l.kind === "cursor" ? { ...style, width: 0 } : style}
+        style={l.kind === "cursor" ? { ...style, width: 0 } : l.kind === "image" && l.blend ? { ...style, mixBlendMode: l.blend } : style}
       >
         {inner}
       </div>

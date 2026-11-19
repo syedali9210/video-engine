@@ -7,4 +7,5 @@ export const params = {
   line: "your Illustrator subscription.",
   tool: "Pen Tool",
   how: "Click for corners. Drag for curves.",
+  screen: "",
 };

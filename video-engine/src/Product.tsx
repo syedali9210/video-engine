@@ -21,6 +21,7 @@ import type { TemplateScript } from "./studio/script"
 import { accentOf } from "./theme"
 import { Problem } from "./States"
 import { Batch, animOf, type BatchJob } from "./Batch"
+import { MakerPanel } from "./MakerPanel"
 
 type KitRow = { id: string; name: string; updated: string; accent?: string; logo?: string; files: number }
 
@@ -58,7 +59,7 @@ const SOURCES = ["tokens", "logo", "the site", "screens"]
 const rank = (from?: string) => (from ? SOURCES.findIndex((s) => from.startsWith(s)) : 99)
 
 
-export function ProductPage({ templates, onMake, onPlan, onBatch }: { templates: Template[]; /** a film from a template, with this kit in it (and its lines, written for it) */ onMake: (t: Template, kit: ProductKit, lines?: Record<string, string>) => void; /** a planned film: its script, and each of its films' values */ onPlan: (script: TemplateScript, kit: ProductKit, values: Record<string, Record<string, string>>) => void; /** a film queued on the renderer for a batch */ onBatch: BatchJob }) {
+export function ProductPage({ templates, onMake, onPlan, onBatch, onOpenFilm }: { /** a film the film maker made, opened in the Studio as it is */ onOpenFilm: (comp: unknown) => void; templates: Template[]; /** a film from a template, with this kit in it (and its lines, written for it) */ onMake: (t: Template, kit: ProductKit, lines?: Record<string, string>) => void; /** a planned film: its script, and each of its films' values */ onPlan: (script: TemplateScript, kit: ProductKit, values: Record<string, Record<string, string>>) => void; /** a film queued on the renderer for a batch */ onBatch: BatchJob }) {
   const [kits, setKits] = useState<KitRow[]>([])
   const [kit, setKit] = useState<ProductKit | null>(null)
   const [busy, setBusy] = useState("")
@@ -313,6 +314,13 @@ export function ProductPage({ templates, onMake, onPlan, onBatch }: { templates:
       {kit && kit.files.length > 0 && (
         <PageSection className="mt-14" title="Tools">
           <KitTools kit={kit} onKit={setKit} add={add} />
+        </PageSection>
+      )}
+
+      {kit && (
+        <PageSection className="mt-16" title="The film maker">
+          <p className="-mt-2 mb-5 max-w-[720px] text-body text-fg-2">The brief once, then a film from the template whose story fits: every line written in one call and checked, its cost shown, a note in plain words to change it.</p>
+          <MakerPanel kit={kit} onOpen={onOpenFilm} />
         </PageSection>
       )}
 

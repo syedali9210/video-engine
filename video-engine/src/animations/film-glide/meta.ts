@@ -22,6 +22,7 @@ export default {
     size: "16x9",
     end: 12.35,
     look: "night",
+    tone: { ground: "#000000", ink: "#ffffff", accent: "#3d8bff" },
     shots: [
       { name: "Wide", at: 0, role: ["intro", "product"], energy: 1, enter: "cut", exit: "push-in" },
       { name: "Macro", at: 4.35, role: ["detail", "product"], energy: 1, enter: "push-in", exit: "cut" },

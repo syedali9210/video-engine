@@ -125,8 +125,12 @@ async function frame(t: number) {
     }),
   )
   where = "drawing"
+  // the frame laid out first, so the videos that show in it are known: one in a scene that isn't showing is left where
+  // it is (seeking every video each frame, a world under every scene, is what made films with video slow)
+  view.current!.render(at)
   for (const v of document.querySelectorAll("video")) {
     if (!v.duration) continue
+    if (v.closest<HTMLElement>("[data-scene]")?.style.visibility === "hidden") continue
     const want = at % v.duration
     if (Math.abs(v.currentTime - want) > 0.0005) {
       v.currentTime = want

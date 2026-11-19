@@ -22,6 +22,7 @@ export default {
     size: "16x9",
     end: 14.56,
     look: "studio",
+    tone: { ground: "#ebeae7", ink: "#121212", accent: "#6d5dfc" },
     shots: [
       { name: "The hero", at: 0, role: ["hook", "product"], energy: 2, enter: "cut", exit: "pan" },
       { name: "Down the page", at: 2.2, role: ["feature", "product"], energy: 2, enter: "pan", exit: "whip" },
