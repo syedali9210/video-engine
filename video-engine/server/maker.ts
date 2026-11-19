@@ -16,12 +16,23 @@
 //   POST /__film/critic { id }                  stills of the last render read against the brief; fixes applied
 //   POST /__film/keep { id, keep }              your verdict: taste for the picker
 //   POST /__film/contract { film }              a contract drafted for a template that has none
-//   POST /__film/direct { kit, length?, size?, style?, notes?, review? }   a film directed from a story
+//   POST /__film/direct { kit, length?, size?, style?, notes?, review?, project?, flow?, cards?, pace? }
+//                                               a film directed from a story
 //                                               (src/studio/screenplay.ts); review: read it and direct it again
-//                                               with the critic's notes while a score is under 4
+//                                               with the critic's notes while a score is under 4; project: the
+//                                               product's codebase, whose panels a feature is built from; flow:
+//                                               a film with no cuts, scenes morphing into each other (flow.ts), cut to
+//                                               a measured pace (`pace`: a profile's name, .engine-data/profiles)
+//   GET  /__film/panels?kit=&project=           the panels found in the product's code (src/studio/panels.ts)
+//   POST /__film/panel-capture { url, panel }   the product's own panel, frozen from its running app (headless Chrome,
+//                                               public/panel-capture.js) -> { src, found }
+//   POST /__film/card-capture { url, text }     a card of the product's own (a post, a message), frozen by its words
+//   POST /__film/panel-snapshot { html }        a panel frozen elsewhere (the capture pasted in a browser) -> { src }
 //   POST /__film/review { id }                  stills of a film, its scorecard and its cross-check
 //   GET  /__film/assets · POST /__film/asset { kit, kind: world|mark|shape, id? }   the generator (server/generate.ts)
-//   GET  /__film/media/<name>                    a recording placed on a film's clock
+//   POST /__film/flow { flow, name?, mood?, size? }  a flow written by hand (src/studio/flow.ts), no kit needed: fitted
+//                                               to its choreography and made into a film -> { id, length, scenes }
+//   GET  /__film/media/<name>                    a recording, a captured panel or a picture placed in a film
 //   POST /__film/sequence { kit, parts: [{ template, shots?, screens? }], size?, length?, mood?, seam? }
 //                                               one film from several templates' shots
 import { execFileSync } from "node:child_process"
@@ -30,14 +41,15 @@ import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readd
 import { createHash } from "node:crypto"
 import type { IncomingMessage, ServerResponse } from "node:http"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { extname, join, resolve as resolvePath } from "node:path"
 import type { Plugin, ViteDevServer } from "vite"
 import { parseJSON } from "./ai.ts"
 import { run, type Answer } from "./work.ts"
 import { loadKit } from "./kits.ts"
 import { devtools, dropProfile, findChrome, jobFile, sendFile } from "./studio.ts"
 import { scored } from "./music.ts"
-import { generator } from "./generate.ts"
+import { generator, palette } from "./generate.ts"
+import { library as imageLibrary, vibeOfKit } from "./images.ts"
 import type { Brief, Op, Pick, Problem, Stage, TemplateInfo } from "../src/studio/maker.ts"
 import type { Contract } from "../src/studio/contracts.ts"
 import type { ProductKit } from "../src/studio/product.ts"
@@ -98,10 +110,24 @@ export function maker(): Plugin {
         A: (await server.ssrLoadModule("/src/studio/artist.ts")) as { DIRECTIONS: DirectionT[] },
         SC: (await server.ssrLoadModule("/src/studio/script.ts")) as { compileScript: (s: unknown, ctx: unknown) => CompT },
         CC: (await server.ssrLoadModule("/src/studio/crosscheck.ts")) as typeof import("../src/studio/crosscheck.ts"),
+        PN: (await server.ssrLoadModule("/src/studio/panels.ts")) as typeof import("../src/studio/panels.ts"),
+        FL: (await server.ssrLoadModule("/src/studio/flow.ts")) as unknown as FLT,
         R: (await server.ssrLoadModule("/src/registry.ts")) as { byId: (id: string) => { params?: Record<string, unknown>; film?: { size: string; end: number; shots: { at: number; energy: number; enter: string }[] } } | undefined },
       })
       // the director's module as the server uses it (its own types would pull the app into the server's check)
-      type Carrier = { id: string; kind: "words" | "logo" | "device" | "clip" | "shape"; what: string; file?: string; seconds?: number; phone?: boolean; focus?: { x: number; y: number } }
+      type Carrier = { id: string; kind: "words" | "logo" | "device" | "clip" | "shape" | "panel"; what: string; file?: string; seconds?: number; phone?: boolean; focus?: { x: number; y: number }; panel?: PanelT }
+      type PanelT = import("../src/studio/panels.ts").Panel
+      // the flow generator as the server uses it (src/studio/flow.ts; its own types would pull the app in)
+      type CardT = { by?: string; handle?: string; tag?: string; lines: string[]; src?: string; h?: number }
+      type PaceT = { name: string; move: number; hold: number; morph: number; ease: string; bezier: number[]; typeCps: number; revealCps: number }
+      type FlowT = { name: string; accent: string; pace: PaceT; scenes: { kind: string; dur: number; meaning?: MeaningT }[] }
+      type FLT = {
+        SOFT_MORPH: PaceT
+        flowFromSpine: (sp: SpineT, c: Carrier[], o: { name: string; accent: string; dark?: boolean; logo?: string; prompt?: string; cards?: CardT[]; length?: number; pace?: PaceT; media?: (c: Carrier) => string; aspect?: (c: Carrier) => number | undefined; tone?: string; style?: Record<string, unknown>; orbit?: string[]; image?: { src: string; light?: boolean }; motion?: string }) => FlowT
+        starts: (f: FlowT) => number[]
+        lengthOf: (f: FlowT) => number
+        fitted: (f: FlowT) => FlowT
+      }
       type SpineT = { promise: string; throughline: string; signature: string; beats: { role: string; buys: string; say: string; sub?: string; carrier: string; seconds: number }[] }
       type MeaningT = { role: string; buys: string; says: string; carrier: string; shows: string }
       type DirectionT = { id: string; name: string; hint: string; energy: number; tempo: number }
@@ -109,7 +135,7 @@ export function maker(): Plugin {
         spineRequest: (b: Brief, c: Carrier[], o: { length: number; tone: string; notes?: string }) => { schema: { name: string; schema: object }; messages: { role: "system" | "user"; content: string }[] }
         fixSpine: (raw: unknown, c: Carrier[], b: Brief, length: number) => SpineT
         productShare: (s: SpineT, c: Carrier[]) => number
-        buildFilm: (s: SpineT, c: Carrier[], ad: DirectionT, m: { light?: boolean; world: string; mark: string; shapes: Record<string, string>; screen: (file: string) => string; clip: (file: string, start: number, seconds: number) => string }, o: { size?: string; url?: string; name: string }) => { script: unknown; devices: ({ src: string; phone: boolean } | null)[]; starts: number[]; energy: number[]; meanings: MeaningT[] }
+        buildFilm: (s: SpineT, c: Carrier[], ad: DirectionT, m: { light?: boolean; accent?: string; font?: string; world: string; worlds?: string[]; field?: { accent?: string; dark?: boolean }; mark: string; shapes: Record<string, string>; screen: (file: string) => string; clip: (file: string, start: number, seconds: number) => string }, o: { size?: string; url?: string; name: string }) => { script: unknown; devices: ({ src: string; phone: boolean } | null)[]; starts: number[]; energy: number[]; meanings: MeaningT[] }
         METAPHORS: { id: string; means: string }[]
       }
       type CompT = { size: string; fps: number; music?: unknown; scenes: { duration: number; name?: string; transition?: string; meaning?: MeaningT; layers: { kind: string; anim?: string; values?: Record<string, unknown> }[] }[] }
@@ -368,6 +394,91 @@ export function maker(): Plugin {
         return `/__film/media/${name}`
       }
 
+      /** The panels in the product's code: its codebase's components and pages (`project`, walked; the usual build and
+          dependency folders left out), and any code files dropped in its kit. At most 600 files of 300 KB. */
+      const CODE = /\.(tsx|jsx|vue|svelte|astro|html?)$/i
+      const SKIP = /^(node_modules|\.git|dist|build|out|\.next|\.nuxt|\.svelte-kit|\.vercel|\.turbo|coverage|vendor|\.engine-data|engine-exports|storybook-static)$/
+      async function codePanels(k: ProductKit, project?: string) {
+        const { PN } = await mods()
+        const found: PanelT[] = []
+        const take = (file: string, label: string) => {
+          try {
+            if (statSync(file).size > 300_000) return
+            found.push(...PN.panelsFromCode(readFileSync(file, "utf8"), label))
+          } catch {
+            /* unreadable: skipped */
+          }
+        }
+        if (project && existsSync(project)) {
+          const base = resolvePath(project)
+          let files = 0
+          const walk = (d: string, depth: number) => {
+            if (depth > 8 || files >= 600) return
+            for (const e of readdirSync(d, { withFileTypes: true })) {
+              if (files >= 600) return
+              if (e.isDirectory()) {
+                if (!SKIP.test(e.name) && !e.name.startsWith(".")) walk(join(d, e.name), depth + 1)
+              } else if (CODE.test(e.name) && !/\.(test|spec|stories)\./.test(e.name)) {
+                files++
+                take(join(d, e.name), join(d, e.name).slice(base.length + 1))
+              }
+            }
+          }
+          walk(base, 0)
+        }
+        for (const f of k.files) if (CODE.test(f.name) || /\.(tsx|jsx)$/i.test(extname(f.name))) take(join(root, "kits", k.id, "files", f.id), f.name)
+        return PN.dedupe(found)
+      }
+
+      /** A frozen panel kept with the films' media (its address is what the unfold film fetches). */
+      function keepSnapshot(html: string) {
+        const name = `panel-${createHash("sha1").update(html).digest("hex").slice(0, 16)}.html`
+        mkdirSync(media, { recursive: true })
+        writeFileSync(join(media, name), html)
+        return `/__film/media/${name}`
+      }
+      /** The product's own panel, frozen from its running app: the page opened in headless Chrome, the panel found by
+          its words (its title, its properties' labels, its buttons), every element's look inlined. Looks on the page it's
+          given, then on up to six of that page's own links whose words share the panel's. */
+      async function capturePanel(url: string, p: PanelT, card?: string): Promise<{ src?: string; found?: unknown; error?: string; bg?: string; w?: number; h?: number }> {
+        const chrome = findChrome()
+        if (!chrome) return { error: "No Chrome or Edge to open the app in (STUDIO_CHROME)." }
+        const profile = mkdtempSync(join(tmpdir(), "anim-engine-chrome-panel-"))
+        const cdp = await devtools(chrome, profile)
+        const script = readFileSync(join(server.config.root, "public", "panel-capture.js"), "utf8")
+        const spec = JSON.stringify({ title: p.title, rows: p.rows, ctas: p.ctas })
+        const open = async (u: string) => {
+          await cdp.send("Page.navigate", { url: u })
+          for (let i = 0; i < 200 && !(await cdp.evaluate("document.readyState === 'complete'").catch(() => false)); i++) await sleep(100)
+          await sleep(1500)
+          await cdp.evaluate(script)
+          return (await cdp.evaluate(card ? `window.__captureCard(${JSON.stringify({ text: card })})` : `window.__capturePanel(${spec})`, 60000)) as { html?: string; w?: number; h?: number; found?: unknown; error?: string; bg?: string }
+        }
+        try {
+          await cdp.send("Page.enable")
+          await cdp.send("Emulation.setDeviceMetricsOverride", { width: 1600, height: 1000, deviceScaleFactor: 1, mobile: false })
+          let r = await open(url)
+          if (!r.html) {
+            const words = new Set(PN_tokens([p.title, ...p.rows.map((x) => x.split(":")[0]), ...p.ctas].join(" ")))
+            const links = ((await cdp.evaluate(`[...document.querySelectorAll("a[href]")].map((a) => [a.href, a.textContent]).filter(([h]) => h.startsWith(location.origin))`)) as [string, string][]) ?? []
+            const ranked = links
+              .map(([h, txt]) => ({ h, n: PN_tokens(`${txt} ${h}`).filter((w) => words.has(w)).length }))
+              .filter((x) => x.n > 0)
+              .sort((a, b) => b.n - a.n)
+              .slice(0, 6)
+            for (const l of ranked) if ((r = await open(l.h)).html) break
+          }
+          return r.html ? { src: keepSnapshot(r.html), found: r.found, bg: r.bg, w: r.w, h: r.h } : { error: r.error ?? "Not found" }
+        } catch (e) {
+          return { error: (e as Error).message }
+        } finally {
+          await cdp.close()
+          dropProfile(profile)
+        }
+      }
+      let PN_tokens: (s: string) => string[] = (s) => s.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2)
+      void mods().then((m) => (PN_tokens = m.PN.tokens))
+
       /** Directs a film and reads it, and while its weakest score is under 4, directs it again with the critic's notes
           (two rounds at most): the best film comes back, with every card. */
       async function directed(o: Parameters<typeof direct>[0] & { rounds?: number }) {
@@ -389,8 +500,8 @@ export function maker(): Plugin {
         return { film: load(best.f.id) ?? best.f, card: best.card, cards }
       }
 
-      async function direct(o: { kit: string; length?: number; size?: string; style?: string; notes?: string; mood?: string }) {
-        const { SP, A, SC, P } = await mods()
+      async function direct(o: { kit: string; length?: number; size?: string; style?: string; notes?: string; mood?: string; project?: string; flow?: boolean; cards?: CardT[]; pace?: string; choices?: Record<string, unknown>; motion?: string; orbit?: string[]; images?: boolean }) {
+        const { SP, A, SC, P, PN } = await mods()
         const log: Stage[] = []
         const k = loadKit(o.kit)
         if (!k) throw new Error(`No product kit “${o.kit}”`)
@@ -410,6 +521,11 @@ export function maker(): Plugin {
           // the generator's shapes, each one idea: only the ones a beat uses are made
           ...SP.METAPHORS.map((x) => ({ id: x.id, kind: "shape" as const, what: `a shape: ${x.means}` })),
         ]
+        // the panels in its code: a feature it has a panel for is built on screen (the ones with the most in them first)
+        t0 = Date.now()
+        const panels = (await codePanels(k, o.project)).sort((a, b) => b.rows.length + b.ctas.length - (a.rows.length + a.ctas.length)).slice(0, 10)
+        carriers.push(...panels.map((p) => ({ id: p.id, kind: "panel" as const, what: PN.panelWhat(p), panel: p })))
+        if (o.project || panels.length) step(log, "panels", t0, null, `${panels.length} in the code: ${panels.map((p) => p.title).join(", ") || "none"}`)
         const dark = !k.brand.ground || parseInt(k.brand.ground.slice(1, 3), 16) < 90
         const ad = A.DIRECTIONS.find((d) => d.id === o.style) ?? A.DIRECTIONS.find((d) => d.id === (dark ? "keynote" : "glass"))!
         t0 = Date.now()
@@ -417,12 +533,23 @@ export function maker(): Plugin {
         const a = await run({ job: "plan", schema: req.schema, maxTokens: 3000, messages: req.messages })
         step(log, "story", t0, a)
         const spine = SP.fixSpine(parseJSON(a.text), carriers, brief, length)
+        // the panels the story builds, as the product draws them: frozen from its running app (its address), so the
+        // film shows the exact component; without one, they're drawn from their words
+        const cast = carriers.filter((c) => c.kind === "panel" && c.panel && spine.beats.some((b) => b.carrier === c.id))
+        if (cast.length && k.url) {
+          t0 = Date.now()
+          const got = await Promise.all(cast.map(async (c) => ({ c, r: await capturePanel(k.url!, c.panel!) })))
+          for (const { c, r } of got) if (r.src) c.panel = { ...c.panel!, src: r.src, ...(r.bg ? { surface: r.bg } : {}) }
+          step(log, "panels captured", t0, null, got.map(({ c, r }) => `${c.panel!.title}: ${r.src ? "the app's own" : `drawn (${r.error})`}`).join("; "))
+        }
+        if (o.flow) return directFlow(o, k, brief, spine, carriers, ad, dark, log, length)
         // the world, the mark and the shapes the story uses: made once for the brand, kept after
         t0 = Date.now()
-        const res = await gen.forFilm(k, [...new Set(spine.beats.map((x) => x.carrier).filter((c) => c.startsWith("shape:")))])
-        step(log, "world, mark and shapes", t0, null, `${Object.keys(res.shapes).length} shapes: ${Object.keys(res.shapes).join(", ") || "none"}`)
+        // (the world is a composed field, drawn live: only the mark and the shapes are rendered)
+        const res = await gen.forFilm(k, [...new Set(spine.beats.map((x) => x.carrier).filter((c) => c.startsWith("shape:")))], { worlds: false })
+        step(log, "mark and shapes", t0, null, `${Object.keys(res.shapes).length} shapes: ${Object.keys(res.shapes).join(", ") || "none"}`)
         t0 = Date.now()
-        const built = SP.buildFilm(spine, carriers, ad, { light: res.light, world: res.world, mark: res.mark, shapes: res.shapes, screen: (file) => k.files.find((f) => f.id === file)!.url, clip: (file, start, seconds) => placeClip(k, file, start, seconds) }, { size: o.size ?? "16x9", url: brief.url, name: brief.product })
+        const built = SP.buildFilm(spine, carriers, ad, { light: res.light, accent: res.accent, font: k.brand.text, world: res.world, field: { accent: res.accent, dark: !res.light }, mark: res.mark, shapes: res.shapes, screen: (file) => k.files.find((f) => f.id === file)!.url, clip: (file, start, seconds) => placeClip(k, file, start, seconds) }, { size: o.size ?? "16x9", url: brief.url, name: brief.product })
         const accent = k.brand.accent || k.brand.ink || "#ededed"
         const brand = { name: brief.product, bg: k.brand.ground ?? "#000000", surface: "#111113", ink: k.brand.ink ?? "#ededed", muted: "#a1a1aa", accent, onAccent: "#0b0b0c", font: k.brand.text ?? "", display: k.brand.display ?? "", mono: "", radius: k.brand.radius ?? 12, dark, fonts: k.brand.fonts ?? [] }
         let comp = SC.compileScript(built.script, { device: "macbook", posture: "open", anim: "maze-walk", copy: { ...P.kitCopy(k), name: brief.product }, brand, accent })
@@ -446,6 +573,87 @@ export function maker(): Plugin {
         const share = SP.productShare(spine, carriers)
         step(log, "build", t0, null, `${spine.beats.length} beats, ${total.toFixed(1)} s, ${Math.round(share * 100)}% on the product, ${ad.name}, ${mood} score`)
         const f: FilmRecord = { id: randomUUID().slice(0, 12), kit: k.id, name: `${brief.product}: directed (${ad.name})`, made: new Date().toISOString(), picks: [], versions: [{ at: new Date().toISOString(), template: `directed:${ad.id}`, film: "directed", size: comp.size, values: { spine: JSON.stringify(spine) }, problems: [] }], comp, renders: [], log }
+        save(f)
+        return f
+      }
+
+      /** A flow film from the story (src/studio/flow.ts): no cuts, every scene becoming the next through a shape they
+          share, at a measured film's pace (`pace`, a profile npm run measure made; the reference's own by default). One
+          film over all its scenes, each scene playing its slice of it, so the Studio edits it scene by scene. */
+      async function directFlow(o: Parameters<typeof direct>[0], k: ProductKit, brief: Brief, spine: SpineT, carriers: Carrier[], ad: DirectionT, dark: boolean, log: Stage[], length: number) {
+        const { FL, P } = await mods()
+        const t0 = Date.now()
+        const p = palette(k)
+        let pace = FL.SOFT_MORPH
+        if (o.pace) {
+          const f = join(root, "profiles", `${o.pace.replace(/[^\w-]/g, "")}.json`)
+          if (existsSync(f)) pace = { ...pace, ...(JSON.parse(readFileSync(f, "utf8")) as Partial<typeof pace>), name: o.pace }
+        }
+        // cards asked for by their words are the product's own, frozen from its running app (else drawn from them)
+        const cards = await Promise.all(
+          (o.cards ?? []).map(async (c) => {
+            if (c.src || !k.url || !c.lines.length) return c
+            const r = await capturePanel(k.url, { id: "", file: "", title: "", rows: [], ctas: [] }, c.lines[0])
+            return r.src ? { ...c, src: r.src, ...(r.w && r.h ? { h: Math.round((900 * r.h) / r.w) } : {}) } : c
+          }),
+        )
+        const media = (c: Carrier) => {
+          const f = k.files.find((x) => x.id === c.file)
+          return f ? `${c.kind === "clip" ? "video" : "image"}:${f.url}` : ""
+        }
+        // the tone the generator chooses its moves by (compose.ts): the art direction's energy
+        const tone = ad.energy >= 0.85 ? "bold" : ad.energy >= 0.55 ? "bright" : "calm"
+        const aspect = (c: Carrier) => {
+          const f = k.files.find((x) => x.id === c.file)
+          return f?.w && f?.h ? f.w / f.h : undefined
+        }
+        // a picture for the opening, from the library, for this product's vibe (its hue, how deep, its tone, its words)
+        let image: { src: string; light?: boolean } | undefined
+        if (o.images !== false) {
+          const got = imageLibrary(server.config.root).choose(vibeOfKit(k.id, tone as "calm" | "bright" | "bold"))
+          if (got) {
+            image = { src: got.src, light: got.img.light > 0.62 }
+            step(log, "image", t0, null, `${got.img.name} (${got.img.tags.join(", ")}): ${got.why.join("; ") || "the closest"}`)
+          }
+        }
+        const flow = FL.flowFromSpine(spine, carriers, { name: brief.product, accent: p.accent, dark: !p.light, logo: k.files.find((f) => f.kind === "logo")?.url, length, cards, pace, media, aspect, tone, ...(o.choices ? { style: o.choices } : {}), ...(o.orbit?.length ? { orbit: o.orbit } : {}), ...(image ? { image } : {}), ...(o.motion ? { motion: o.motion } : {}) })
+        const accent = k.brand.accent || p.accent
+        const brand = { name: brief.product, bg: "#000000", surface: "#111113", ink: "#ededed", muted: "#a1a1aa", accent, onAccent: "#0b0b0c", font: k.brand.text ?? "", display: k.brand.display ?? "", mono: "", radius: k.brand.radius ?? 12, dark, fonts: k.brand.fonts ?? [] }
+        const mood = o.mood ?? (ad.energy >= 0.85 ? "bright" : ad.tempo >= 120 ? "driving" : dark ? "dark" : "calm")
+        const f = await filmOfFlow(flow, { kit: k.id, name: brief.product, summary: spine.promise, why: [spine.signature], size: o.size, brand, copy: { ...P.kitCopy(k), name: brief.product }, mood, log, values: { spine: JSON.stringify(spine) } })
+        step(log, "flow", t0, null, `${flow.scenes.length} scenes (${flow.scenes.map((s) => s.kind).join(" → ")}), ${FL.lengthOf(flow).toFixed(1)} s, no cuts, at ${flow.pace.name}'s pace`)
+        save(f)
+        return f
+      }
+
+      /** A flow (src/studio/flow.ts) made into a film: one Studio scene per scene of it, each the flow film drawn from
+          its own start, and a score cut to its scenes. The director's (directFlow) and a flow written by hand
+          (POST /__film/flow) both come through here. */
+      async function filmOfFlow(flow: FlowT, o: { kit?: string; name: string; summary?: string; why?: string[]; size?: string; brand?: Record<string, unknown>; copy?: Record<string, unknown>; mood?: string; log?: Stage[]; values?: Record<string, string> }) {
+        const { FL, SC } = await mods()
+        const at = FL.starts(flow)
+        const spec = JSON.stringify(flow)
+        const script = {
+          id: `flow-${Date.now().toString(36)}`,
+          name: `${o.name}: flow`,
+          version: 1,
+          source: "director",
+          summary: o.summary ?? "",
+          size: o.size ?? "16x9",
+          ground: "#000000",
+          light: "studio",
+          why: o.why ?? [],
+          avoid: [],
+          shots: flow.scenes.map((s, i) => ({ name: `${s.kind}: ${s.meaning?.says ?? ""}`.slice(0, 60), dur: s.dur, cut: "cut", why: s.meaning?.buys ?? "", layers: [{ kind: "component", name: "Flow", anim: "film-flow", box: { x: 0.5, y: 0.5, w: 1 }, aspect: 16 / 9, enter: "none", fit: false, from: at[i], rate: 1, values: { spec } }] })),
+        }
+        const accent = flow.accent
+        const brand = o.brand ?? { name: o.name, bg: "#000000", surface: "#111113", ink: "#ededed", muted: "#a1a1aa", accent, onAccent: "#0b0b0c", font: "", display: "", mono: "", radius: 12, dark: true, fonts: [] }
+        let comp = SC.compileScript(script, { device: "macbook", posture: "open", anim: "maze-walk", copy: o.copy ?? { name: o.name }, brand, accent })
+        comp = { ...comp, fps: 60, scenes: comp.scenes.map((sc, i) => ({ ...sc, meaning: flow.scenes[i].meaning })) }
+        const energy: Record<string, number> = { words: 1, prompt: 2, brand: 2, panel: 3, app: 3, tour: 3, orbit: 2, cards: 2, stack: 2, end: 2 }
+        const total = FL.lengthOf(flow)
+        comp = { ...comp, music: scored(join(root, "music"), at.map((a, i) => ({ at: a, energy: energy[flow.scenes[i].kind] ?? 2, enter: "cut" })), total, (o.mood ?? "bright") as Parameters<typeof scored>[3]) }
+        const f: FilmRecord = { id: randomUUID().slice(0, 12), kit: o.kit ?? "", name: `${o.name}: flow`, made: new Date().toISOString(), picks: [], versions: [{ at: new Date().toISOString(), template: "directed:flow", film: "directed", size: comp.size, values: { ...(o.values ?? {}), flow: spec }, problems: [] }], comp, renders: [], log: o.log ?? [] }
         save(f)
         return f
       }
@@ -729,7 +937,8 @@ export function maker(): Plugin {
         if (!url.pathname.startsWith("/__film/")) return next()
         const what = url.pathname.slice("/__film/".length)
         try {
-          const body = req.method === "POST" ? (JSON.parse((await read(req)) || "{}") as Record<string, unknown>) : {}
+          // (a frozen panel carries its fonts and pictures: it may be a few MB)
+          const body = req.method === "POST" ? (JSON.parse((await read(req, what === "panel-snapshot" ? 1.2e7 : 4e6)) || "{}") as Record<string, unknown>) : {}
           const get = (id: unknown) => {
             const f = load(String(id ?? ""))
             if (!f) throw Object.assign(new Error("No such film"), { code: 404 })
@@ -760,7 +969,41 @@ export function maker(): Plugin {
           if (what === "make") return json(res, 200, await make({ kit: String(body.kit), template: body.template as string, size: body.size as string, length: Number(body.length) || undefined, fresh: !!body.fresh }))
           if (what === "sequence") return json(res, 200, await makeSequence(body as Parameters<typeof makeSequence>[0]))
           if (what === "direct") return json(res, 200, body.review ? await directed(body as Parameters<typeof directed>[0]) : await direct(body as Parameters<typeof direct>[0]))
+          // a flow written by hand (no product kit needed): fitted to its own choreography, made into a film
+          if (what === "flow") {
+            const { FL } = await mods()
+            const fl = body.flow as FlowT | undefined
+            if (!fl?.scenes?.length || !fl.name || !fl.accent) return json(res, 400, { error: "Give the flow: { name, accent, scenes: [...] } (src/studio/flow.ts)." })
+            const flow = FL.fitted({ ...fl, pace: fl.pace ?? FL.SOFT_MORPH })
+            const t0 = Date.now()
+            const log: Stage[] = []
+            const f = await filmOfFlow(flow, { name: String(body.name ?? fl.name), summary: String(body.summary ?? ""), size: body.size as string | undefined, mood: body.mood as string | undefined, log })
+            step(log, "flow", t0, null, `${flow.scenes.length} scenes (${flow.scenes.map((s) => s.kind).join(" → ")}), ${FL.lengthOf(flow).toFixed(1)} s`)
+            save(f)
+            return json(res, 200, { id: f.id, length: FL.lengthOf(flow), scenes: flow.scenes.map((s) => ({ kind: s.kind, dur: s.dur })) })
+          }
           if (what === "review") return json(res, 200, await review(get(body.id)))
+          if (what === "panel-capture") {
+            const p = (body.panel ?? {}) as Partial<PanelT>
+            if (!body.url || !p.title) return json(res, 400, { error: "Give the app's url and the panel ({ title, rows, ctas })." })
+            return json(res, 200, await capturePanel(String(body.url), { id: p.id ?? "", file: p.file ?? "", title: p.title, rows: p.rows ?? [], ctas: p.ctas ?? [] }))
+          }
+          // a card of the product's own (a post, a message, a result), frozen by words in it
+          if (what === "card-capture") {
+            if (!body.url || !body.text) return json(res, 400, { error: "Give the app's url and words in the card (text)." })
+            return json(res, 200, await capturePanel(String(body.url), { id: "", file: "", title: "", rows: [], ctas: [] }, String(body.text)))
+          }
+          if (what === "panel-snapshot") {
+            const html = String(body.html ?? "")
+            if (!html.includes("data-unfold-root") || html.length > 8e6) return json(res, 400, { error: "Not a captured panel (public/panel-capture.js makes one)." })
+            return json(res, 200, { src: keepSnapshot(html) })
+          }
+          // the panels a directed film could build, found in the product's code
+          if (what === "panels") {
+            const k = loadKit(String(url.searchParams.get("kit") ?? body.kit))
+            if (!k) return json(res, 404, { error: "No such product kit" })
+            return json(res, 200, await codePanels(k, (url.searchParams.get("project") ?? body.project ?? undefined) as string | undefined))
+          }
           // the generator: the shapes it knows (each one idea), and any asset made for a product on demand
           if (what === "assets") return json(res, 200, (await mods()).SP.METAPHORS)
           if (what === "asset") {
@@ -773,8 +1016,10 @@ export function maker(): Plugin {
           }
           if (what.startsWith("media/")) {
             const name = what.slice("media/".length)
-            if (!/^[\w-]+\.mp4$/.test(name) || !existsSync(join(media, name))) return json(res, 404, { error: "No such file" })
-            return sendFile(req, res, join(media, name), "video/mp4")
+            const types: Record<string, string> = { mp4: "video/mp4", html: "text/html; charset=utf-8", png: "image/png", jpg: "image/jpeg", webp: "image/webp", svg: "image/svg+xml" }
+            const ext = name.split(".").pop() ?? ""
+            if (!/^[\w-]+\.\w+$/.test(name) || !types[ext] || !existsSync(join(media, name))) return json(res, 404, { error: "No such file" })
+            return sendFile(req, res, join(media, name), types[ext])
           }
           if (what === "get") return json(res, 200, get(url.searchParams.get("id")))
           if (what === "list")

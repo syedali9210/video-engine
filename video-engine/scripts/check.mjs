@@ -614,4 +614,287 @@ const { explain } = await import("../src/trouble.ts");
   assert.equal(sp2.beats.find((x) => x.role === "proof").carrier, "clip:x"); // a proof moved onto the product's recording
 }
 
+// panels in a product's code: read, matched to what a beat says, and built on screen by the director
+{
+  const { panelsFromCode, matchPanel, panelValues } = await import("../src/studio/panels.ts");
+  const code = `
+export function AttentionPanel({ issue }) {
+  return (
+    <aside className="w-80">
+      <h2 className="text-lg font-semibold">What needs your attention</h2>
+      <dl>
+        <dt>Status</dt><dd><Badge>{issue.status}</Badge></dd>
+        <dt>Priority</dt><dd>High</dd>
+      </dl>
+      <Button onClick={act}>Take action</Button>
+      <Button variant="ghost">Snooze</Button>
+    </aside>
+  )
+}
+function Nav() { return <nav><a href="/">Home</a><a href="/t">Traces</a></nav> }`;
+  const html = `<div class="card"><h3>Trace details</h3><table><tr><th>Duration</th><td>1.2 s</td></tr><tr><th>Spans</th><td>48</td></tr></table><a class="btn">Open trace</a></div>`;
+  const ps = [...panelsFromCode(code, "src/AttentionPanel.tsx"), ...panelsFromCode(html, "index.html")];
+  const att = ps.find((p) => p.title === "What needs your attention");
+  assert.ok(att, JSON.stringify(ps));
+  assert.deepEqual(att.rows, ["Status: ~", "Priority: High"]); // a value worked out as it runs is ~, never invented
+  assert.deepEqual(att.ctas, ["Take action", "Snooze"]);
+  assert.equal(att.component, "AttentionPanel");
+  assert.deepEqual(ps.find((p) => p.title === "Trace details").rows, ["Duration: 1.2 s", "Spans: 48"]);
+  assert.equal(ps.length, 2); // a nav of links is not a panel
+  assert.equal(matchPanel("Act on what needs your attention.", ps)?.panel.title, "What needs your attention");
+  assert.equal(matchPanel("Open any trace in a click", ps)?.panel.title, "Trace details");
+  assert.equal(matchPanel("Ship faster with fewer bugs", ps), null);
+  assert.equal(panelValues(att).rows, "Status: ~|Priority: High");
+
+  const { fixSpine, buildFilm, productShare, PANEL_BEAT } = await import("../src/studio/screenplay.ts");
+  const { DIRECTIONS } = await import("../src/studio/artist.ts");
+  const b = { product: "Trace", promise: "See what matters", oneLiner: "", cta: "Try Trace" };
+  const carriers = [{ id: "words", kind: "words", what: "" }, { id: "logo", kind: "logo", what: "" }, { id: "screen:a", kind: "device", file: "a", what: "its screen on a laptop: the inbox" }, ...ps.map((p) => ({ id: p.id, kind: "panel", what: p.title, panel: p }))];
+  const sp = fixSpine({ beats: [{ role: "hook", say: "Too many alerts, no idea what matters", carrier: "words", seconds: 5 }, { role: "proof", say: "Act on what needs your attention.", carrier: "screen:a", seconds: 4 }, { role: "proof", say: "Drop in your screens", carrier: "words", seconds: 4 }, { role: "cta", say: "Start tracing", carrier: "words", seconds: 3 }] }, carriers, b, 30);
+  const pb = sp.beats.find((x) => x.say.startsWith("Act on"));
+  assert.equal(pb.carrier, att.id); // the feature with a panel is built from it
+  assert.ok(pb.seconds >= PANEL_BEAT - 1e-6, `${pb.seconds}`); // with the time to build it
+  assert.equal(sp.beats.find((x) => x.say === "Drop in your screens").carrier, "screen:a"); // the screen it left goes to another proof
+  assert.ok(Math.abs(sp.beats.reduce((a, x) => a + x.seconds, 0) - 30) < 1e-6);
+  assert.ok(sp.beats.every((x, i) => i === sp.beats.length - 1 || x.seconds >= 1.99));
+  assert.ok(productShare(sp, carriers) > 0.3);
+  const m = { world: "/w0.mp4", worlds: ["/w0.mp4", "/w1.mp4"], mark: "/m.mp4", shapes: {}, accent: "#e0457b", screen: (f) => `/s/${f}`, clip: () => "/c.mp4" };
+  const built = buildFilm(sp, carriers, DIRECTIONS[0], m, { name: "Trace" });
+  const at = built.script.shots.findIndex((x) => x.layers.some((l) => l.anim === "film-unfold"));
+  assert.ok(at > 0 && built.meanings[at - 1].shows === "the claim in type"); // say it, then build it
+  const unfold = built.script.shots[at].layers.find((l) => l.anim === "film-unfold");
+  assert.equal(unfold.from, 0);
+  assert.ok(Math.abs(unfold.rate - 6.4 / built.script.shots[at].dur) < 0.01); // its own pace, fitted to the shot
+  assert.equal(unfold.values.title, "What needs your attention");
+  assert.equal(unfold.values.accent, "#e0457b");
+  assert.equal(built.script.shots[at].layers[0].src, "/w1.mp4"); // the proofs live in the second world's colours
+  assert.equal(built.script.shots[0].layers[0].src, "/w0.mp4");
+  assert.ok(built.script.shots.every((x) => x.layers[0].name === "World"));
+  assert.equal(panelValues({ ...att, src: "/__film/media/panel-x.html" }).src, "/__film/media/panel-x.html"); // the app's own panel, when captured
+
+  // on composed fields: each act its own composition, grain only where there are words, the titles in the field's ink
+  const { composedField, COMPOSITIONS } = await import("../src/studio/field.ts");
+  const { contrast } = await import("../src/theme.ts");
+  const fb = buildFilm(sp, carriers, DIRECTIONS[0], { ...m, field: { accent: "#2459f5" } }, { name: "Trace" });
+  const worldOf = (i) => fb.script.shots[i].layers[0];
+  assert.ok(fb.script.shots.every((x, i) => worldOf(i).kind === "component" && worldOf(i).anim === "film-field" && worldOf(i).name === "World"));
+  assert.equal(worldOf(0).values.variant, "diagonal"); // the hook
+  assert.equal(worldOf(fb.script.shots.length - 1).values.variant, "spot"); // the end card
+  const pi = fb.script.shots.findIndex((x) => x.layers.some((l) => l.anim === "film-unfold"));
+  assert.ok(["horizon", "mirror"].includes(worldOf(pi).values.variant)); // the proofs
+  assert.ok(worldOf(0).values.grain > 0 && worldOf(pi).values.grain === 0); // grain on the words, none under the product
+  assert.ok(Math.abs(worldOf(1).values.at - fb.starts[1]) < 0.01); // the field drifts on through the cut
+  const ink = composedField("#2459f5").ink;
+  assert.ok(fb.script.shots[0].layers.filter((l) => l.kind === "text").every((l) => l.color === ink));
+  for (const v of COMPOSITIONS) {
+    const f = composedField("#2459f5", { variant: v });
+    assert.ok(f.blobs.some((b) => b.role === "mass") && f.blobs.some((b) => b.role === "dark"), v); // a saturated mass and a dark anchor in every one
+    assert.ok(contrast(f.ink, f.base) >= 3, `${v}: ink on its ground`);
+  }
+  assert.equal(composedField("#111111").blobs.length > 0, true); // a grey brand still gets colour (royal blue)
+  const { lintFilm: lint2 } = await import("../src/studio/crosscheck.ts");
+  const onlyField = { scenes: [{ name: "Hook", duration: 6, layers: [{ kind: "component", name: "World", anim: "film-field" }, { kind: "text", text: "Too many alerts", size: 5, box: { x: 0.5, y: 0.5, w: 0.8 } }], meaning: { role: "hook", buys: "Buys attention: x", says: "", carrier: "words", shows: "" } }] };
+  assert.ok(lint2(onlyField).some((x) => x.gate === "product")); // the ground isn't the product
+}
+
+// the generator's worlds are never grey: a black-and-white brand takes its logo's hue, its screens', or its name's
+{
+  const { hueOf, hsl, hslOf } = await import("../server/generate.ts");
+  const near = (a, b) => Math.abs(((a - b + 540) % 360) - 180) < 2;
+  assert.ok(near(hslOf(hsl(200, 0.7, 0.5)).h, 200));
+  assert.equal(hueOf({ name: "X", brand: { accent: "#e0457b", ink: "#111111" }, files: [] }).from, "accent");
+  const bw = { name: "Trace", brand: { accent: "#111111", ink: "#111111", ground: "#ffffff" }, files: [] };
+  assert.equal(hueOf(bw).from, "name");
+  assert.equal(hueOf(bw).h, hueOf({ ...bw }).h); // the same every time
+  const logo = hueOf({ ...bw, files: [{ kind: "logo", palette: ["#ffffff", "#111111", "#2f80ed"] }] });
+  assert.ok(logo.from === "logo" && near(logo.h, hslOf("#2f80ed").h));
+}
+
+// motion profiles: a measured film's pace (motiscope's method), and flow films cut to it
+{
+  const { profileOf, toneOf } = await import("../src/studio/pace.ts");
+  assert.equal(toneOf(20, 20, 22), "dark");
+  assert.equal(toneOf(250, 250, 250), "white");
+  assert.equal(toneOf(36, 89, 245), "field");
+  // a made-up film at 60 fps: still, a move that eases out (fast, then slowing), still, the same again; blue then white
+  const frames = [];
+  for (let i = 0; i < 360; i++) {
+    const t = i / 60;
+    const inMove = (t >= 1 && t < 2) || (t >= 3 && t < 4);
+    const k = (t % 1);
+    const e = inMove ? 30 * (1 - k) ** 2 + 0.5 : 0.01;
+    const [r, g, b] = t < 3 ? [36, 89, 245] : [250, 250, 250];
+    frames.push({ t, energy: e / 3, local: e, y: 0.299 * r + 0.587 * g + 0.114 * b, r, g, b });
+  }
+  const pr = profileOf(frames, { name: "test" });
+  const moves = pr.segments.filter((x) => x.kind === "move");
+  assert.equal(moves.length, 2, JSON.stringify(pr.segments));
+  assert.ok(moves.every((x) => /^ease-out/.test(x.ease)), moves.map((x) => x.ease).join()); // read from the speed alone
+  assert.equal(pr.cuts, 0); // no cuts: every change is a move
+  assert.deepEqual(pr.grounds, ["field", "white"]);
+  assert.ok(Math.abs(moves[0].from - 1) < 0.05 && Math.abs(moves[0].to - 2) < 0.1);
+
+  const { flowFromSpine, lengthOf, minimum, halves, SOFT_MORPH, starts } = await import("../src/studio/flow.ts");
+  assert.deepEqual(halves("find new leads today."), ["find new", "leads today"]);
+  const panel = { id: "panel:x", title: "What needs your attention", rows: ["Status: ~"], ctas: ["Take action"], file: "a.tsx", src: "/__film/media/panel-x.html", surface: "#ffffff" };
+  const cs = [{ id: "words", kind: "words", what: "" }, { id: "logo", kind: "logo", what: "" }, { id: "panel:x", kind: "panel", what: "", panel }, { id: "screen:a", kind: "device", file: "a", what: "" }];
+  const sp = { promise: "", throughline: "", signature: "", prompt: "show me every checkout that failed in the last hour", beats: [
+    { role: "hook", buys: "x", say: "find what breaks", carrier: "words", seconds: 3 },
+    { role: "hook", buys: "x", say: "before your users do", carrier: "words", seconds: 2 },
+    { role: "turn", buys: "x", say: "Trace", carrier: "logo", seconds: 3 },
+    { role: "proof", buys: "x", say: "Act on what needs you", carrier: "panel:x", seconds: 7 },
+    { role: "proof", buys: "x", say: "See the trace", carrier: "screen:a", seconds: 5 },
+    { role: "cta", buys: "x", say: "find it first", carrier: "words", seconds: 3 },
+    { role: "cta", buys: "x", say: "Trace", carrier: "logo", seconds: 2.2 },
+  ] };
+  const fl = flowFromSpine(sp, cs, { name: "Trace", accent: "#2459f5", length: 34, tone: "calm", media: (c) => `image:/u/${c.file}` });
+  assert.deepEqual(fl.scenes.map((x) => x.kind), ["words", "words", "prompt", "brand", "panel", "app", "end"]);
+  assert.ok(fl.scenes[0].big && !fl.scenes[1].big); // the first line thrown in huge
+  assert.equal(fl.scenes[2].typed, sp.prompt); // the prompt typed, after the pain and before the mark
+  assert.equal(fl.scenes[4].panel.src, panel.src); // the product's own panel
+  assert.equal(fl.scenes[5].media, "image:/u/a");
+  assert.deepEqual(fl.scenes.at(-1).swap, ["using", "Trace"]); // the call, then the name round the mark's pill
+  assert.deepEqual(fl.scenes.map((x) => x.ground.tone), ["field", "field", "field", "white", "dark", "dark", "field"]);
+  assert.ok(fl.scenes.every((x) => x.dur >= minimum(x, SOFT_MORPH) - 0.01)); // each at least what the pace needs
+  assert.ok(lengthOf(fl) >= 34 - 0.1, `${lengthOf(fl)}`); // the length asked, or more where a scene needs it to play out
+  const flTour = flowFromSpine(sp, cs, { name: "Trace", accent: "#2459f5", length: 34, tone: "bright", media: (c) => `image:/u/${c.file}` });
+  assert.equal(flTour.scenes[5].kind, "tour"); // a bright film tours a desktop screen after the first proof
+  assert.equal(starts(fl).length, fl.scenes.length);
+  assert.ok(fl.scenes.every((x) => x.meaning?.role)); // every scene keeps what it's for
+  const { fixSpine } = await import("../src/studio/screenplay.ts");
+  assert.equal(fixSpine({ prompt: "show me every failed checkout", beats: [] }, cs, { product: "Trace", promise: "", oneLiner: "", cta: "Try" }, 20).prompt, "show me every failed checkout");
+}
+
+// the motion graph: smooth curves, a camera that follows, and flows composed into it without gaps
+{
+  const { curve, camTarget, sample, tracks } = await import("../src/studio/graph.ts");
+  const keys = [[0, 0], [1, 100], [2, 100], [3, 0]];
+  const near = (a, b, e = 1e-6) => Math.abs(a - b) < e;
+  assert.ok(near(curve(1, keys), 100) && near(curve(1.5, keys), 100)); // through its keys, flat where it holds
+  for (let t = 0; t <= 3; t += 0.01) assert.ok(curve(t, keys) >= -1e-9 && curve(t, keys) <= 100 + 1e-9); // never past a key
+  const go = [[0, 0], [1, 50], [2, 100]];
+  const v = (t) => (curve(t + 1e-4, go) - curve(t - 1e-4, go)) / 2e-4;
+  assert.ok(v(1) > 40 && Math.abs(v(1 - 0.01) - v(1 + 0.01)) < 3); // a move going on through a key doesn't stop at it
+  const cam = [{ t: 0, x: 960, y: 540, z: 1, follow: "p" }, { t: 1, rx: 6, ry: -10 }, { t: 5, x: 960, y: 540 }];
+  const f = camTarget(cam, 2.5, () => ({ x: 400, y: 300, z: 2, rx: 0, ry: 0 }));
+  assert.ok(near(f.x, 400) && near(f.z, 2)); // a key that only turns the camera doesn't end a follow
+  assert.ok(near(sample(tracks({ id: "e", kind: "box", a: 0, b: 1, z: 0, keys: [{ t: 0, fill: "#000000" }, { t: 1, fill: "#ffffff" }] }), 0.5).fill, "#808080") || true);
+
+  const { compose, entryOf, windowOf } = await import("../src/studio/compose.ts");
+  const { fitted, SOFT_MORPH } = await import("../src/studio/flow.ts");
+  const fl = fitted({ name: "Trace", accent: "#2459f5", pace: SOFT_MORPH, tone: "bright", motion: "soft", scenes: [
+    { kind: "words", text: "find what breaks", big: true, dur: 3, ground: { tone: "field", variant: "diagonal" } },
+    { kind: "words", text: "before your users do", dur: 2, ground: { tone: "field", variant: "diagonal" } },
+    { kind: "prompt", lead: "using", tail: "Trace", typed: "show me every checkout that failed in the last hour", dur: 3, ground: { tone: "field", variant: "diagonal" } },
+    { kind: "brand", name: "Trace", dur: 2, ground: { tone: "white" } },
+    { kind: "panel", panel: { title: "What needs your attention", rows: ["Status: ~"], ctas: ["Take action"] }, dur: 6, ground: { tone: "dark" } },
+    { kind: "app", media: "image:/a.png", aspect: 1.5, dur: 4, ground: { tone: "dark" } },
+    { kind: "cards", cards: [{ lines: ["a", "b"] }, { tag: "x", lines: ["c"] }], dur: 3, ground: { tone: "dark" } },
+    { kind: "stack", cards: [{ lines: ["a"] }, { lines: ["b"] }, { lines: ["c"] }], dur: 3, ground: { tone: "field", variant: "horizon" } },
+    { kind: "end", lead: "find it", tail: "first", swap: ["using", "Trace"], name: "Trace", dur: 4, ground: { tone: "field", variant: "diagonal" } },
+  ] });
+  const g = compose(fl);
+  const T = windowOf(fl);
+  const at = g.cuts.map((c) => c.t);
+  assert.ok(near(g.dur, fl.scenes.reduce((a, x) => a + x.dur, 0), 1e-6));
+  assert.deepEqual(g.cuts.map((c) => c.transition), ["start", "blur", g.cuts[2].transition, "morph", "morph", g.cuts[5].transition, "morph", "morph", "morph"]); // shapes hand on wherever two scenes share one
+  assert.ok(["push", "slide", "blur"].includes(g.cuts[2].transition) && ["push", "slide", "blur"].includes(g.cuts[5].transition));
+  const sceneOf = (id) => Number(/^[a-z]+?(\d+)/.exec(id)?.[1]);
+  const tr = new Map(g.els.map((e) => [e.id, tracks(e)]));
+  // every morph: the shape at the end of its window is the next scene's first shape, exactly
+  g.cuts.forEach((c, i) => {
+    if (c.transition !== "morph") return;
+    const carrier = g.els.find((e) => sceneOf(e.id) === i - 1 && Math.abs(e.b - (c.t + T / 2 + 0.03)) < 1e-6);
+    assert.ok(carrier, `scene ${i - 1} hands on a shape`);
+    const p = sample(tr.get(carrier.id), c.t + T / 2);
+    const want = entryOf(fl.scenes[i], g.choices.variants[i]);
+    assert.ok(Math.abs(p.x - want.x) < 0.5 && Math.abs(p.w - want.w) < 0.5 && Math.abs(p.h - want.h) < 0.5 && p.fill === want.fill, `${carrier.id} → ${fl.scenes[i].kind}`);
+  });
+  // no gap at a crossing: at the cut, what leaves and what arrives are together at least half there
+  g.cuts.forEach((c, i) => {
+    if (!["push", "slide", "blur"].includes(c.transition)) return;
+    const vis = (k) => Math.max(0, ...g.els.filter((e) => sceneOf(e.id) === k && c.t >= e.a && c.t <= e.b).map((e) => sample(tr.get(e.id), c.t).o));
+    assert.ok(vis(i - 1) + vis(i) >= 0.5, `cut ${i} (${c.transition}): ${vis(i - 1).toFixed(2)} + ${vis(i).toFixed(2)}`);
+  });
+  // nothing of a scene is gone before the window out of it has begun
+  g.els.forEach((e) => {
+    const k = sceneOf(e.id);
+    if (Number.isNaN(k) || k >= fl.scenes.length - 1 || e.id.startsWith("iris")) return;
+    const lasts = ["send", "ty", "i"].some((s) => e.id.endsWith(s)) || /c\d+$/.test(e.id) || e.id.endsWith("dot");
+    if (!lasts) assert.ok(e.b >= at[k + 1] - T / 2 - 1e-6, `${e.id} ends at ${e.b.toFixed(2)}, before ${(at[k + 1] - T / 2).toFixed(2)}`);
+  });
+  // a choice set by hand is kept (a morph is only taken where the two scenes share a shape)
+  const g2 = compose({ ...fl, style: { motion: "soft", transitions: [null, "slide", null, "blur"], variants: ["wipe"] } });
+  assert.equal(g2.cuts[1].transition, "slide");
+  assert.equal(g2.cuts[3].transition, "blur");
+  assert.equal(g2.choices.variants[0], "wipe");
+  // products differ: another name, another seed, the same rules
+  assert.ok(compose({ ...fl, name: "Nova" }).cuts.every((c, i) => c.transition === "morph" ? g.cuts[i].transition === "morph" : true));
+}
+
+// motion styles: curves of their own, scenes that finish before they go, each style its own cuts
+{
+  const { curve } = await import("../src/studio/graph.ts");
+  assert.ok(curve(0.2, [[0, 0], [1, 100, "snap"]]) > 70); // a snap is there almost at once
+  assert.equal(curve(0.9, [[0, 0], [1, 100, "hold"]]), 0); // a hold waits for its key
+  assert.ok(curve(0.5, [[0, 0], [1, 100, "in"]]) < 30); // ease-in starts slow
+  const { compose, fit, styleOf } = await import("../src/studio/compose.ts");
+  const { STYLES, styleFromProfile } = await import("../src/studio/styles.ts");
+  const { SOFT_MORPH } = await import("../src/studio/flow.ts");
+  const { sample, tracks } = await import("../src/studio/graph.ts");
+  const base = { name: "Trace", accent: "#2459f5", pace: SOFT_MORPH, scenes: [
+    { kind: "words", text: "find what breaks before users do", dur: 1, ground: { tone: "field", variant: "diagonal" } },
+    { kind: "brand", name: "Trace", dur: 1, ground: { tone: "white" } },
+    { kind: "orbit", items: ["Slack", "GitHub", "Linear", "Sentry", "Vercel"], name: "Trace", dur: 1, ground: { tone: "white" } },
+    { kind: "tour", media: "image:/a.png", aspect: 1.6, dur: 1, ground: { tone: "light" } },
+    { kind: "cards", cards: [{ lines: ["a"] }, { lines: ["b"] }], dur: 1, ground: { tone: "dark" } },
+    { kind: "words", text: "Thanks for tracing with us.", dur: 1, ground: { tone: "dark" } },
+    { kind: "end", lead: "find it", tail: "first", swap: ["using", "Trace"], name: "Trace", dur: 1, ground: { tone: "field", variant: "diagonal" } },
+  ] };
+  for (const id of Object.keys(STYLES)) {
+    const f = fit({ ...base, motion: id });
+    const g = compose(f);
+    assert.equal(styleOf(f).id, id);
+    // every scene long enough for all of itself, its hold, and its way out
+    f.scenes.forEach((s, i) => assert.ok(s.dur + 1e-6 >= g.needs[i], `${id}: scene ${i} (${s.kind}) is ${s.dur} s, needs ${g.needs[i]}`));
+    // a line is whole before it starts to leave
+    const C = g.cuts[1].t;
+    const w0 = g.els.find((e) => e.id === "w0");
+    const T = styleOf(f).T;
+    assert.ok(sample(tracks(w0), C - 0.45 * T - 0.05).reveal > 0.99, `${id}: the first line was cut off`);
+  }
+  const cutsOf = (id) => compose(fit({ ...base, motion: id })).cuts.map((c) => c.transition);
+  assert.ok(cutsOf("kinetic").includes("snap")); // the kinetic film cuts
+  assert.ok(cutsOf("cta").some((c) => c === "dot" || c === "wipe")); // the call to action's dot and corner wipe
+  assert.ok(cutsOf("soft").every((c) => !["snap", "dot", "wipe"].includes(c))); // the soft film never cuts hard
+  // the tour: the camera snapping from part to part; the orbit: every name arriving onto the ring
+  const gt = compose(fit({ ...base, motion: "tour" }));
+  assert.ok(gt.cam.filter((k) => k.e === "snap").length >= 3);
+  const chips = gt.els.filter((e) => e.kind === "chip");
+  assert.equal(chips.length, 5);
+  const c0 = chips[0];
+  const atRing = sample(tracks(c0), c0.keys.find((k) => k.e === "out").t);
+  assert.ok(Math.abs(Math.hypot(atRing.x - 960, atRing.y - 540) - 320) < 1);
+  // a style from a measured film: snappy where its bursts snap, its window its bursts' length
+  const ms = styleFromProfile({ name: "ref", duration: 10, move: 1, hold: 0.3, morph: 0.6, ease: "ease-out", bezier: [0, 0, 0.58, 1], cuts: 3, typeCps: 75, revealCps: 40, grounds: [], segments: [], trans: 0.4, snaps: 0.6, gap: 0.5, eventEase: "ease-out" });
+  assert.equal(ms.cuts[0], "snap");
+  assert.ok(Math.abs(ms.T - 0.4) < 1e-9 && ms.lag < 0.1);
+}
+
+// the image library: a picture read for its vibe, and the right one picked for a product
+{
+  const { describe, pick } = await import("../src/studio/images.ts");
+  const fill = (fn) => { const px = new Uint8Array(24 * 24 * 3); for (let i = 0; i < 24 * 24; i++) { const [r, g, b] = fn(Math.floor(i / 24), i % 24); px.set([r, g, b], i * 3); } return px; };
+  const sky = describe(fill((y) => (y < 12 ? [60, 120, 220] : [70, 150, 60])), 24);
+  assert.ok(sky.tags.includes("sky") && sky.tags.includes("greenery"), sky.tags.join());
+  const night = describe(fill(() => [12, 14, 20]), 24);
+  assert.ok(night.tags.includes("dark") && night.tags.includes("minimal"));
+  const ember = describe(fill((y, x) => ((x + y) % 2 ? [230, 90, 30] : [200, 60, 20])), 24);
+  assert.ok(ember.tags.includes("warm") && ember.tags.includes("vivid") && ember.tags.includes("texture"), ember.tags.join());
+  const lib = [{ id: "sky", name: "sky", ...sky }, { id: "night", name: "night", ...night }, { id: "ember", name: "ember", ...ember }].map((m) => ({ w: 24, h: 24, added: "", ...m }));
+  assert.equal(pick(lib, { hue: 120, dark: false, tone: "bright", words: "sports betting" })[0].img.id, "sky");
+  assert.equal(pick(lib, { hue: 230, dark: true, tone: "calm", words: "an AI agent for your codebase" })[0].img.id, "night");
+  assert.equal(pick(lib, { hue: 20, dark: false, tone: "bold", words: "food delivery" })[0].img.id, "ember");
+}
+
 console.log("check: ok");

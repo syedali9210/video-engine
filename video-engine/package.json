@@ -8,7 +8,8 @@
     "preview": "vite preview",
     "check": "node scripts/check.mjs",
     "posters": "node scripts/posters.mjs",
-    "templates": "node scripts/templates.mjs"
+    "templates": "node scripts/templates.mjs",
+    "measure": "node scripts/measure.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

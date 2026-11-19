@@ -9,10 +9,79 @@ import { execFileSync } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { ProductKit } from "../src/studio/product.ts"
+import { neighbours } from "../src/studio/hues.ts"
 
 export type Gen = ReturnType<typeof generator>
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const mix = (a: string, b: string, t: number) => "#" + [1, 3, 5].map((i) => Math.round(parseInt(a.slice(i, i + 2), 16) * (1 - t) + parseInt(b.slice(i, i + 2), 16) * t).toString(16).padStart(2, "0")).join("")
+/** a #rrggbb colour's hue (degrees), saturation and lightness (0–1) */
+export function hslOf(c: string) {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16) / 255)
+  const mx = Math.max(r, g, b)
+  const mn = Math.min(r, g, b)
+  const l = (mx + mn) / 2
+  const d = mx - mn
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1))
+  const h = d === 0 ? 0 : mx === r ? 60 * (((g - b) / d + 6) % 6) : mx === g ? 60 * ((b - r) / d + 2) : 60 * ((r - g) / d + 4)
+  return { h, s, l }
+}
+/** #rrggbb from a hue (any degrees), saturation and lightness */
+export function hsl(h: number, s: number, l: number) {
+  const k = (n: number) => (n + (((h % 360) + 360) % 360) / 30) % 12
+  const a = s * Math.min(l, 1 - l)
+  const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1))
+  return "#" + [0, 8, 4].map((n) => Math.round(f(n) * 255).toString(16).padStart(2, "0")).join("")
+}
+/** hues that make a good-looking world when a brand gives none (blue-violet, azure, magenta, teal, coral, sky) */
+const HUES = [262, 214, 322, 168, 14, 194]
+/** The hue a product's world is lit in: its accent's, else the most colourful colour in its logo, then its screens,
+    else one picked from its name (the same every time). A world is never grey. */
+export function hueOf(k: Pick<ProductKit, "name" | "brand" | "files"> & { words?: { name?: string } }) {
+  const a = k.brand.accent && /^#[0-9a-f]{6}$/i.test(k.brand.accent) && k.brand.accent !== k.brand.ink ? hslOf(k.brand.accent) : null
+  if (a && a.s > 0.18 && a.l > 0.12 && a.l < 0.92) return { h: a.h, from: "accent" as const }
+  for (const kinds of [["logo"], ["desktop", "phone", "tablet"]]) {
+    const best = k.files
+      .filter((f) => kinds.includes(f.kind ?? ""))
+      .flatMap((f) => (f.palette ?? []).map((c, i) => ({ c, i })))
+      .filter(({ c }) => /^#[0-9a-f]{6}$/i.test(c))
+      .map(({ c, i }) => ({ o: hslOf(c), i }))
+      .filter(({ o }) => o.s > 0.35 && o.l > 0.2 && o.l < 0.85)
+      .sort((x, y) => y.o.s * (1 - y.i * 0.05) - x.o.s * (1 - x.i * 0.05))[0]
+    if (best) return { h: best.o.h, from: kinds[0] === "logo" ? ("logo" as const) : ("screens" as const) }
+  }
+  const name = k.words?.name || k.name || "product"
+  let n = 0
+  for (const ch of name) n = (n * 31 + ch.charCodeAt(0)) >>> 0
+  return { h: HUES[n % HUES.length], from: "name" as const }
+}
+
+/** The brand as the generator reads it: its accent (for a black-and-white brand, one in the hue its logo, its
+    screens or its name gives: hueOf) and a ramp of it, dark to light. */
+export function palette(k: ProductKit) {
+  const { h } = hueOf(k)
+  const own = k.brand.accent && k.brand.accent !== k.brand.ink && hueOf(k).from === "accent" ? k.brand.accent : null
+  const accent = own ?? hsl(h, 0.72, 0.56)
+  const ramp = [mix(accent, "#000000", 0.8), mix(accent, "#000000", 0.4), accent, mix(accent, "#ffffff", 0.7)]
+  // a light brand (a white ground) gets a light world, and its shapes and mark are made on white (multiplied over it)
+  const g = k.brand.ground ?? "#000000"
+  const light = (parseInt(g.slice(1, 3), 16) + parseInt(g.slice(3, 5), 16) + parseInt(g.slice(5, 7), 16)) / 3 > 160
+  return { accent, ramp, light, bg: light ? "#ffffff" : "#000000", h }
+}
+
+/** The world: a grainy field of colour, slow enough to sit under words: three lights in the brand's hue and its
+    neighbours (never grey: a black-and-white brand takes the hue hueOf gives), pastel on a light brand's white, deep
+    on a dark one's black (src/studio/hues.ts picks the neighbours). `variant` turns the hues (0: the brand's; 1: ~55°
+    on; 2: ~50° back), so the proofs can
+    live in a world of their own colour and the film changes colour as it goes. */
+const SHIFT = [0, 55, -50]
+export const worldSpec = (k: ProductKit, variant = 0) => {
+  const { light, h: h0 } = palette(k)
+  const h = h0 + (SHIFT[variant] ?? 0)
+  const [a, b, c] = neighbours(h)
+  const colors = light ? [hsl(a, 0.85, 0.78), hsl(b, 0.8, 0.85), hsl(c, 0.75, 0.74)] : [hsl(a, 0.7, 0.32), hsl(b, 0.76, 0.48), hsl(c, 0.62, 0.17)]
+  // (no grain: a world runs under the whole film, and grain is a scene's, never the film's)
+  return { kind: "gradient", name: `${light ? "Light world" : "World"} ${Math.round(((h % 360) + 360) % 360)}°`, duration: 8, bg: light ? "#ffffff" : "#000000", grain: 0, mesh: "water", colors, density: 0.75, strength: 1.4, speed: 0.22, frequency: 5.5, amplitude: 0, brightness: light ? 1.0 : 0.78, light: 0, cam: { az: 180, polar: 100, dist: 2.6, zoom: 1 }, pos: [0, 0, 0], rot: [0, 0, 200], orbit: 0 }
+}
 
 /** `origin`: this server; `root`: the project; `media`: where film-ready copies are kept (served at /__film/media/). */
 export function generator(o: { origin: () => string; root: string; media: string }) {
@@ -38,23 +107,6 @@ export function generator(o: { origin: () => string; root: string; media: string
     if (!existsSync(out)) execFileSync(ff(), ["-y", "-loglevel", "error", "-i", join(o.root, ".engine-data", "shaders", url.split("/").pop()!), "-an", "-c:v", "libx264", "-crf", "16", "-preset", "veryfast", "-g", "12", "-keyint_min", "12", "-sc_threshold", "0", "-pix_fmt", "yuv420p", out])
     return `/__film/media/${name}`
   }
-  /** The brand as the generator reads it: its accent (none for a black-and-white brand) and a ramp of it, dark to light. */
-  function palette(k: ProductKit) {
-    const accent = k.brand.accent && k.brand.accent !== k.brand.ink ? k.brand.accent : null
-    const ramp = accent ? [mix(accent, "#000000", 0.8), mix(accent, "#000000", 0.4), accent, mix(accent, "#ffffff", 0.7)] : ["#121215", "#45454d", "#a3a3ad", "#f3f3f6"]
-    // a light brand (a white ground) gets a light world, and its shapes and mark are made on white (multiplied over it)
-    const g = k.brand.ground ?? "#000000"
-    const light = (parseInt(g.slice(1, 3), 16) + parseInt(g.slice(3, 5), 16) + parseInt(g.slice(5, 7), 16)) / 3 > 160
-    return { accent, ramp, light, bg: light ? "#ffffff" : "#000000" }
-  }
-
-  /** The world: a dark grainy field with one lit fold, in the accent (or silver), slow enough to sit under words. */
-  const worldSpec = (k: ProductKit) => {
-    const { accent, light } = palette(k)
-    const colors = light ? (accent ? [mix(accent, "#ffffff", 0.82), "#ffffff", mix(accent, "#ffffff", 0.6)] : ["#ececef", "#ffffff", "#d3d3d9"]) : accent ? [mix(accent, "#000000", 0.55), mix(accent, "#000000", 0.15), "#000000"] : ["#202027", "#6a6a76", "#000000"]
-    return { kind: "gradient", name: light ? "Light world" : "World", duration: 8, bg: light ? "#ffffff" : "#000000", grain: light ? 0.06 : 0.1, mesh: "water", colors, density: 0.75, strength: 1.4, speed: 0.2, frequency: 5.5, amplitude: 0, brightness: light ? 1.02 : 0.62, light: 0, cam: { az: 180, polar: 100, dist: 2.6, zoom: 1 }, pos: [0, 0, 0], rot: [0, 0, 200], orbit: 0 }
-  }
-
   /** The product's mark as a shape for the liquid: the lines of its logo picked out from the tile they sit on (a logo
       on a square is opaque: its alpha would be the square). None: its initial. */
   async function markShape(k: ProductKit) {
@@ -70,13 +122,13 @@ export function generator(o: { origin: () => string; root: string; media: string
     const r = (await fetch(`${o.origin()}/__shader/logo`, { method: "POST", headers: { "content-type": "image/png" }, body: readFileSync(out) }).then((x) => x.json())) as { url?: string }
     return r.url ? { type: "image", src: r.url } : { type: "text", text: (k.words.name || k.name)[0] ?? "•" }
   }
-  const markSpec = async (k: ProductKit) => ({ kind: "liquid", name: palette(k).light ? "Mark on white" : "Mark", duration: 8, bg: palette(k).bg, grain: 0.05, logo: await markShape(k), size: 0.72, noise: 4, contour: 0.6, rim: 0.35, speed: 0.4, iterations: 15, scale: 3.12, dot: 0.04, dotMul: 0.21, vOffset: 5.1, intensity: 0.07, exp: 0.2, rgb: palette(k).accent ? [1.1, 0.7, 0.9] : [1.1, 1.0, 1.05], shift: 0.9, edge: 0.4 })
+  const markSpec = async (k: ProductKit) => ({ kind: "liquid", name: palette(k).light ? "Mark on white" : "Mark", duration: 8, bg: palette(k).bg, grain: 0.05, logo: await markShape(k), size: 0.72, noise: 4, contour: 0.6, rim: 0.35, speed: 0.4, iterations: 15, scale: 3.12, dot: 0.04, dotMul: 0.21, vOffset: 5.1, intensity: 0.07, exp: 0.2, rgb: [1.1, 0.7, 0.9], shift: 0.9, edge: 0.4 })
 
   /** A shape metaphor in the brand's ramp, on black (laid over the world with a screen blend in a film). */
   const shapeSpec = (k: ProductKit, id: string) => {
     const { accent, ramp, bg } = palette(k)
     const base = { kind: "shape", duration: 8, bg, grain: 0.06, count: 4, gap: 0.35, round: 0.3, axis: "across", angle: 45, density: 1, faces: "all", base: mix(ramp[0], "#000000", 0.3), flow: 0.3, speed: 0.25, glass: 0, glow: 0, under: "", motion: "turn", tilt: 28, dist: 7, spin: 0.25, colors: ramp }
-    const glow = accent ?? "#d8d8de"
+    const glow = accent
     const by: Record<string, Record<string, unknown>> = {
       "shape:formats": { name: "Every format", form: "slabs", count: 6, gap: 0.3, round: 0.4, axis: "stack", flow: 0.2, motion: "fan", tilt: 34, dist: 9.5 },
       "shape:layers": { name: "Layers", form: "discs", count: 3, gap: 0.9, round: 1, axis: "facing", glass: 0.85, glow: 0.6, under: glow, flow: 0.4, motion: "breathe", tilt: 22, dist: 6.4 },
@@ -90,12 +142,15 @@ export function generator(o: { origin: () => string; root: string; media: string
   }
 
   return {
-    world: (k: ProductKit) => render(worldSpec(k)),
+    world: (k: ProductKit, variant = 0) => render(worldSpec(k, variant)),
     mark: async (k: ProductKit) => render(await markSpec(k)),
     shape: (k: ProductKit, id: string) => render(shapeSpec(k, id)),
     /** whichever of these a film needs, made (or found kept) */
-    async forFilm(k: ProductKit, shapes: string[]) {
-      return { light: palette(k).light, world: await this.world(k), mark: await this.mark(k), shapes: Object.fromEntries(await Promise.all(shapes.map(async (id) => [id, await this.shape(k, id)] as const))) }
+    /** `worlds: false`: the film sits on composed fields (src/studio/field.ts, drawn live), so no world is rendered */
+    async forFilm(k: ProductKit, shapes: string[], o: { worlds?: boolean } = {}) {
+      const p = palette(k)
+      const [world, alt] = o.worlds === false ? ["", ""] : await Promise.all([this.world(k, 0), this.world(k, 1)])
+      return { light: p.light, accent: p.accent, world, worlds: o.worlds === false ? undefined : [world, alt], mark: await this.mark(k), shapes: Object.fromEntries(await Promise.all(shapes.map(async (id) => [id, await this.shape(k, id)] as const))) }
     },
   }
 }

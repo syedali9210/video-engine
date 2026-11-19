@@ -768,7 +768,15 @@ ${made.spec.name} (${a.kind}${a.preset ? "" : ", made by the rules"}), ${width} 
       type: "object",
       properties: {
         kit: str("The product kit's id."),
+        project: str("Absolute path of the product's codebase. Its panels (a heading with its properties and buttons, in its components and pages) are read, and a feature the film talks about that has one is built on screen: a blob that stretches into the panel's title as it's typed, drops open with its properties, its buttons forming, the camera following it at an angle. With the kit's url (the app running), it's the product's own panel, frozen from the app."),
         length: { type: "number", description: "Seconds (10 to 90, default 30)." },
+        flow: { type: "boolean", description: "A film with no cuts: every scene becomes the next through a shape they share (the prompt box shrinking to a dot that opens into the mark, the name's pill growing into the product's panel, a card becoming the next), words wiped on, prompts streaming in, grounds changing with the morphs, at a measured reference film's pace." },
+        pace: str("With flow: the motion profile to cut it to (a name `npm run measure -- <video> --name <name>` made; default: the reference's own, soft-morph)."),
+        motion: { type: "string", enum: ["soft", "kinetic", "tour", "orbit", "cta"], description: "With flow: how it moves (src/studio/styles.ts, measured off reference films): soft (smooth ~1 s morphs), kinetic (a new idea every ~0.8 s, snaps, word swaps), tour (the camera snapping around the product's UI, close on what's pressed), orbit (spin-ups, arrivals out of a glow, lines turning straight), cta (0.1–0.4 s changes between long reads, a dot growing out of the full stop, a wipe from the corner). Default: by the product's tone." },
+        orbit: { type: "array", items: { type: "string" }, description: "With flow: names to orbit the mark (what the product works with: its integrations, partners)." },
+        images: { type: "boolean", description: "With flow: open on a picture from the image library (/images.html), chosen for the product's vibe (default true when there are any)." },
+        choices: { type: "object", description: "With flow: choices to make by hand instead of by rule (src/studio/compose.ts): { tone: calm|bright|bold, seed, variants: [per scene, e.g. \"pullback\", \"wipe\", \"rise\", \"dot\", \"icon\", \"fly\"], transitions: [per cut: morph|iris|push|blur|slide] }." },
+        cards: { type: "array", items: { type: "object", properties: { lines: { type: "array", items: { type: "string" } }, by: { type: "string" }, tag: { type: "string" } }, required: ["lines"] }, description: "With flow: cards to show morphing into each other (posts, messages, results). With the kit's url, each is the app's own card, found by its first line." },
         style: { type: "string", enum: ["keynote", "pop", "editorial", "neon", "glass", "bold"], description: "The art direction (default: keynote on a dark brand, soft glass on a light one)." },
         notes: str("What to say or stress, in plain words."),
         review: { type: "boolean", description: "Score its stills and direct it again while a score is under 4 (default true)." },
@@ -787,7 +795,7 @@ ${made.spec.name} (${a.kind}${a.preset ? "" : ", made by the rules"}), ${width} 
         return j
       }
       progress("The story, then the world, then the scorecard", 10)
-      const r = await post("/__film/direct", { kit: a.kit, length: a.length, style: a.style, notes: a.notes, review: a.review !== false })
+      const r = await post("/__film/direct", { kit: a.kit, project: a.project ? resolve(a.project) : undefined, length: a.length, style: a.style, notes: a.notes, review: a.review !== false, flow: !!a.flow, pace: a.pace, cards: a.cards, choices: a.choices, motion: a.motion, orbit: a.orbit, images: a.images })
       const film = r.film ?? r
       const lines = [`Film ${film.id}: ${film.name}.`]
       const spine = JSON.parse(film.versions.at(-1).values.spine)

@@ -435,6 +435,30 @@ template (`src/studio/screenplay.ts`):
    rounds at most), and the best film is kept.
 4. **Recordings of the product** come from the kit's tours (`POST /__kit/tour`): the running app driven through a flow
    with real clicks and a drawn cursor, filmed at 2×.
+5. **Features built from their panels.** Give the director the product's codebase (`project`, or code files dropped in
+   the kit) and it reads the panels in it (`src/studio/panels.ts`): a heading with its properties (label and value),
+   its lines and its buttons, in its components and pages. A proof whose words match a panel (its title most, then
+   its component's name, then the rest) is carried by that panel, whatever carried it before, and gets 7 s. It's said
+   in type, then a hard cut to the panel built in front of the viewer (*Feature unfold*, `src/animations/film-unfold`).
+   With the kit's address (`url`, the app while it runs), it's the product's own component: the panel is frozen from the
+   running app in headless Chrome (`public/panel-capture.js`, `POST /__film/panel-capture { url, panel }`), found by
+   its title, its labels and its buttons. Every element's look is inlined, its `::before`/`::after` made real, and its
+   pictures, fonts and SVG sprites carried as data. Its title, rows and buttons are marked to be built one by one. The
+   script also runs pasted in a browser's console (`await __capturePanel({ title, rows, ctas })`), and
+   `POST /__film/panel-snapshot { html }` keeps what it returns. Without an address, the panel is drawn from its words.
+   - a blob lands (with the icon that leads the title, if it has one)
+   - it stretches into a pill that hugs the title as it's typed, the camera riding along with its edge
+   - a beat's hold, then it drops open: the properties arrive as the bottom edge passes them, the camera following it
+     down
+   - the buttons form at the bottom the way the title did (a blob stretching into each), the main one is pressed
+   - the camera pulls back to the whole panel
+
+   The camera looks at it from a held angle (`angle`, 16° by default) and follows the container's moving edge with a
+   little lag, leaning a few degrees more the way it moves, so it feels carried rather than keyed. The depth of field
+   is soft (`blur`): what's far from where the camera looks goes a little out of focus, and the frame's top and bottom
+   edges soften. It's never a blur over the whole frame. Under it, a composed field (below) with this scene's own
+   grain. A drawn panel's value that the code only works out as it runs is a soft bar, never made up.
+   `GET /__film/panels?kit=&project=` lists what it found.
 
 **motionmaxxing** (Tejas Makwana's skill, Apache-2.0, vendored whole in `public/motionmaxxing` with its LICENSE and
 NOTICE, its bundled GSAP 3.12.5 under GreenSock's own license; only `docs/media` left out). The director follows its
@@ -452,13 +476,142 @@ renders it frame for frame; *Motion runtime demo* is its own demo film.
 
 **The generator** (`server/generate.ts`, `GET /__film/assets`, `POST /__film/asset { kit, kind, id? }`) makes, for the
 product's brand:
-- the world: a grainy shader field
+- the world: a shader field in colour, never grey, with no grain of its own. Its hue is the brand's accent; a
+  black-and-white brand takes the most colourful colour in its logo, then its screens, then one picked from its name
+  (the same every time). A directed film no longer sits on it: see *composed fields* below.
 - the mark: the logo's own lines, picked out of its tile, in liquid metal
 - six shapes that each stand for one idea: formats (fanning slabs), layers (glass discs), outputs (tiles), steps
   (pills), core (an orb), loop (a ring)
 
 The director is offered all of them, and only the ones a beat uses are rendered (about a minute each the first time,
 then kept).
+
+**Flow films** (`flow: true` on `POST /__film/direct` and the MCP's `direct_film`, or a flow written by hand with no
+product kit: `POST /__film/flow { flow, mood? }`, then `POST /__film/render { id }`; captured panels, screenshots and
+logos in `.engine-data/films/media` are served at `/__film/media/<name>`). A launch film with no cuts, the way
+the reference films move: every scene becomes the next through a shape they share. Three parts, nothing about any one
+scene baked into the drawing:
+1. **The plan** (`src/studio/flow.ts`): which scenes the story needs, from what the product has.
+   - its hooks as lines
+   - the prompt, when it takes a request (the story writes `prompt`)
+   - the mark
+   - each proof as the product: its panel from the code, its screen or recording
+   - cards, when there are results to show
+   - the call
+
+   Each scene gets at least what the measured pace needs, its transitions included (half a window each side).
+2. **The generator** (`src/studio/compose.ts`): the plan composed into a **motion graph** (`src/studio/graph.ts`),
+   every element a set of keyframes under one camera. Each scene kind has a builder with variants:
+   - words: thrown in huge and pulled back from, wiped on, or risen
+   - prompt: a box opening between two words, or in the middle
+   - mark: out of a dot and an iris of white, or risen
+   - app: opened from its icon, or flown in
+   - panel (the unfold), cards morphing, a stack rising, the call round a glass pill
+   - tour: the product's screen, the camera snapping close onto parts of it and a cursor pressing
+   - orbit: the integrations arriving out of a glow to circle the mark, then spinning up into the cut
+   - cards from a grey placeholder (the call to action's way)
+
+   Each cut takes a transition from a library:
+   - **morph:** the shape one scene ends on IS the shape the next starts from, one element going on (prompt box →
+     dot → name pill → the panel's blob; app window → card → card → stack → glass pill)
+   - **iris:** a disc of the next ground opening
+   - **push:** the camera going through
+   - **blur:** one thing becoming another in place, the new words coming up from below
+   - **slide:** the camera moving on
+   - **snap:** a cut: the next framing at once, the next scene landing on a fast ease-out
+   - **dot:** the line's full stop swelling into a disc that fills the frame with the next ground
+   - **wipe:** a disc of the next ground from the corner
+   - **sweep:** a glow crossing the frame, one view becoming the next under it
+
+   The rules pick them from what two scenes can hand each other, the film's **motion style**, the product's tone (from
+   the art direction: calm, bright, bold) and a seed from its name. Any choice can be made by hand: `choices: { tone, seed, variants: [...],
+   transitions: [...] }`. Every transition has a window centred on the cut. What leaves holds until the window is under
+   way, and in crossings it leaves while the next arrives, over the same stretch, so there's never a gap or an early
+   end.
+3. **The renderer** (`src/animations/film-flow`): draws any graph.
+   - **Curves:** every number follows a monotone cubic through its keys, so speed carries through a key and a move
+     stops only where it holds, never overshooting.
+   - **Camera:** one path over the whole film, followed with a little lag. While a panel is built it follows the
+     panel's growing edge, at an angle.
+   - **Motion blur and focus:** elements blur a little with their own speed, and the frame's edges soften where the
+     graph asks for depth.
+   - **Panels:** the unfold's body (`PanelBody` in `film-unfold/view.tsx`) is one element, so the mark's pill can
+     morph straight into the blob the panel is built from.
+
+`npm run check` holds it to that:
+- every morph hands on exactly (same place, size and colour)
+- no crossing has a gap
+- nothing ends before its transition window
+- a hand-made choice is kept
+
+Cards can be the product's own: give them by their words (`cards: [{ lines }]`) and, with the kit's address, each is
+frozen from the running app (`POST /__film/card-capture { url, text }`, `__captureCard` in
+`public/panel-capture.js`).
+
+**Measuring a reference** (`npm run measure -- <video> [--name <profile>]`, `src/studio/pace.ts`). motiscope's method
+(github.com/KumarSashank/motiscope, MIT) on macOS's own AVFoundation (`scripts/motion/measure.swift`), or on ffmpeg
+elsewhere:
+- a per-frame motion-energy curve, localized to the busiest tenth of the frame
+- moves and holds split at a threshold anchored to the 75th percentile
+- each move's easing fitted from the integral of its speed
+- hard cuts as whole-frame spikes
+- each stretch's ground named from its colour
+
+It writes `.engine-data/profiles/<name>.json`, and `pace: "<name>"` cuts a flow film to it. The built-in
+`soft-morph` is the reference's own:
+- moves of ~1.4 s easing out, holds of ~0.4 s, morphs of ~0.64 s
+- prompts typed at ~75 letters a second, lines wiped on at ~40
+- no cuts
+
+For its curated keyframes too, install motiscope (`~/.motiscope/install.sh`, with ffmpeg) and run
+`motiscope ingest <video>`.
+
+**Motion styles** (`src/studio/styles.ts`, `motion: "<id>"` on a flow film or `direct_film`). How a film moves, measured
+from reference films one at a time (a grid of four was cut into its quadrants and each measured on its own, frame
+doubling undone). Each style sets the transition window, the hold, the curves for entering, leaving, morphing and
+the camera, the camera's lag, how words arrive, and the cuts it reaches for first:
+
+| Style | From | Window | Hold | Cuts first | Words |
+|---|---|---|---|---|---|
+| `soft` | the soft morph reference | 0.96 s | 0.4 s | morph, blur | wiped on |
+| `kinetic` | kinetic type | 0.45 s | 0.3 s | snap, morph | swapped in place |
+| `tour` | a product UI tour | 0.5 s | 0.5 s | snap, sweep | — |
+| `orbit` | a logo orbit | 0.6 s | 0.8 s | iris, dot | rotated in |
+| `cta` | a call-to-action card | 0.3 s | 1.0 s | dot, wipe | word by word |
+
+With none asked for, the tone picks: bold is kinetic, bright is a tour when the product has screens (else cta), calm
+is soft. `styleFromProfile` turns any `npm run measure` profile into a style. Every scene lasts until its own
+choreography is done, plus the style's hold, plus the lead-in of the transition after it (`fit` in `compose.ts`
+lengthens scenes until that's true), so no scene leaves before it's finished.
+
+**The camera generator** (`src/studio/camera.ts`). Three parts, each from the motion style, laid over the framing
+each scene asks for:
+- **in a scene:** a slow creep closer while it's read, and a punch (a quick zoom, settling back) on a beat
+- **between scenes:** through the cut (closing in and coming out into the next), or a snap to the next framing
+- **on an interaction:** a little before something is typed into or pressed, the camera goes close on it (never past
+  filling most of the frame), holds while it happens, then goes back
+
+**The image library** (`/images.html`, `server/images.ts`, `src/studio/images.ts`). Upload pictures for films to open
+on. Each is read once with ffmpeg for its vibe: its palette, hue, how light, vivid, warm and busy, and whether it looks
+like sky, greenery, texture or something minimal. A directed flow film picks the one that suits the product: nearest
+its brand's hue, as light or deep as its brand, as vivid as its tone, and near what its own words say it is. It avoids
+the pictures used most. `POST /__images/pick { kit, tone }` shows the ranking and why.
+
+**Composed fields** (`src/studio/field.ts`, drawn by `src/animations/_film/field.tsx`, the *Composed field* film).
+A directed film sits on a gradient laid out the way a designer lays one out, not scattered blobs. It's one hue family,
+the brand's, across a wide range of light, each colour with a job and a place:
+- a saturated mass filling one side
+- a lighter glow where it thins out
+- a near-white highlight opposite the mass
+- a soft streak a step round the wheel
+- a pale tint haze low in the frame
+- a deep corner that gives it depth
+
+The compositions are a diagonal, its mirror, a horizon and a spotlight. The hook and the call are on the diagonal, the
+mark in the spotlight, and the proofs on the horizon and the mirror in turn, so the film changes as it goes without
+leaving its family. Each shot's field starts its clock where the shot sits in the film, so it drifts on through the
+cuts. It's drawn live, so nothing is rendered for it. Titles take the field's ink, and grain is a scene's own: on the
+words, a little on the mark, none under the product.
 
 **Meaning:** every shot keeps what it's for (`scene.meaning`: its role, the belief it buys, its words, what carries
 it, what it shows). A directed film writes it from its spine. A template film takes its shot's role and its job from

@@ -15,6 +15,13 @@ import { reviews } from "./server/reviews";
 import { search } from "./server/search";
 import { shaders } from "./server/shaders";
 import { maker } from "./server/maker";
+import { images } from "./server/images";
+import { homedir } from "node:os";
+import { join as joinPath } from "node:path";
+
+// ffmpeg and ffprobe installed in ~/.local/bin (no Homebrew) are found even when the dev server's shell lacks it
+const localBin = joinPath(homedir(), ".local", "bin");
+if (existsSync(joinPath(localBin, "ffmpeg")) && !(process.env.PATH ?? "").split(":").includes(localBin)) process.env.PATH = `${localBin}:${process.env.PATH ?? ""}`;
 import ts from "typescript";
 
 // The canvas's real devices (src/canvas/device3d.ts): canvas.js loads them from canvas-3d.js beside it. Built, that's
@@ -123,7 +130,7 @@ const filmTones = (): Plugin => ({
 // Chrome renders it frame by frame; the studio plugin drives that), the web player a film plays in on a site, and a
 // film's review link. And the canvas's real devices, as a module of their own.
 export default defineConfig({
-  plugins: [phosphorPerIcon(), filmTones(), filmKeys(), react(), tailwindcss(), studio(), lab(), work(), templates(), kits(), gates(), versions(), briefs(), voice(), reviews(), search(), shaders(), maker(), canvas3d()],
+  plugins: [phosphorPerIcon(), filmTones(), filmKeys(), react(), tailwindcss(), studio(), lab(), work(), templates(), kits(), gates(), versions(), briefs(), voice(), reviews(), search(), shaders(), maker(), images(), canvas3d()],
   // the icons come one file each (above), never as the whole set
   optimizeDeps: { exclude: ["@phosphor-icons/react"] },
   // the template lab keeps its proposals in .engine-data: a reload for every write would interrupt the admin

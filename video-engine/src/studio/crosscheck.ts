@@ -6,7 +6,7 @@
 // Pure: the server, the panel and `npm run check` all run it.
 
 export type Finding = { gate: string; level: "fail" | "warn"; scene?: number; text: string; fix?: string }
-type L = { kind: string; text?: string; size?: number; font?: string; enter?: string; box?: { x: number; y: number; w: number }; entry?: { at: number; dur: number }; name?: string }
+type L = { kind: string; anim?: string; text?: string; size?: number; font?: string; enter?: string; box?: { x: number; y: number; w: number }; entry?: { at: number; dur: number }; name?: string }
 type S = { name?: string; duration: number; transition?: string; layers: L[]; camera?: { zoom?: number }; camera2?: { zoom?: number }; meaning?: { role: string; buys: string; says: string; carrier: string; shows: string } }
 
 const SLOGAN = /\bmeet\s+[A-Z]|\bnot just\b|\bthe future of\b|\bunlock\w*|\brevolution\w*|\bgame[- ]?chang\w*|\bseamless\w*|\bnext[- ]level\b|\bsupercharg\w*/i
@@ -48,7 +48,8 @@ export function lintFilm(c: { scenes: S[] }): Finding[] {
     else if (!s.meaning.buys) out.push({ gate: "meaning", level: "warn", scene: i, text: `“${s.name ?? `Shot ${i + 1}`}” buys nothing.`, fix: "Write what the viewer believes after it, or cut it." })
   })
   // the product is the film: on screen (a device, a recording, a template's own shot of it) a third of it at least
-  const onScreen = c.scenes.filter((s) => s.layers.some((l) => l.kind === "device" || l.kind === "component" || (l.kind === "image" && (l.name === "Recording" || l.name === "Screen")))).reduce((a, s) => a + s.duration, 0)
+  // (the ground a film sits on, a composed field, is a component too: it isn't the product)
+  const onScreen = c.scenes.filter((s) => s.layers.some((l) => l.kind === "device" || (l.kind === "component" && l.name !== "World" && l.anim !== "film-field") || (l.kind === "image" && (l.name === "Recording" || l.name === "Screen")))).reduce((a, s) => a + s.duration, 0)
   if (onScreen < total / 3) out.push({ gate: "product", level: "fail", text: `The product is on screen ${Math.round((onScreen / total) * 100)}% of the film (a third at least: proofs are half of a good one).`, fix: "Carry the proofs on the product's recordings and screens, not on words or shapes." })
   // almost nothing fades between beats (motionmaxxing law 6)
   const fades = c.scenes.slice(1).filter((s) => FADES.has(s.transition ?? "cut")).length
