@@ -17,7 +17,8 @@ import { TEXT_ANIMS } from "./textanim.ts"
 export type Role = "hook" | "turn" | "proof" | "cta"
 export const ROLES: Role[] = ["hook", "turn", "proof", "cta"]
 /** what a beat is carried by: the line alone on the world, the liquid mark, a screen on a device, a recording, a shape */
-export type Carrier = { id: string; kind: "words" | "logo" | "device" | "clip" | "shape"; what: string; file?: string; seconds?: number; phone?: boolean }
+/** `focus`: where to look on a screen (the reader's), what the camera magnifies */
+export type Carrier = { id: string; kind: "words" | "logo" | "device" | "clip" | "shape"; what: string; file?: string; seconds?: number; phone?: boolean; focus?: { x: number; y: number } }
 /** `buys`: the one belief the beat leaves the viewer with (“Buys trust: the viewer watches the machine do it”) */
 export type Beat = { role: Role; buys: string; say: string; sub?: string; carrier: string; seconds: number }
 export type Spine = { promise: string; throughline: string; signature: string; beats: Beat[] }
@@ -74,7 +75,7 @@ export function spineRequest(b: Brief, carriers: Carrier[], o: { length: number;
     `hook (about ${Math.round(L * 0.15)} s, one or two beats, carried by words): a concrete pain or promise in the audience's own words; the product not named yet.`,
     `turn (about ${Math.round(L * 0.15)} s, one beat carried by logo): say is the product's name, sub what it is in at most 8 words.`,
     `proof (about half the film, two or three beats of ${Math.round(L * 0.15)} to ${Math.round(L * 0.2)} s): say is the claim as an action, a verb first (“Drop in your screens.”); the film shows it, then cuts to the product performing exactly that, so carry it on the recording or screen that shows that action and its result (prefer recordings: they show the product working). sub is the result. Use each recording or screen once. A shape carries a proof only where the claim means what the shape means.`,
-    `cta (at most a quarter of the film): one beat in words, the call in 2 to 5 words; then the last beat carried by logo: say is the product's name and nothing else (no address, no button).`,
+    `cta (at most a quarter of the film): one beat in words, the call in 2 to 5 words starting with a verb (“Start your film.”), about 3 s; then the last beat carried by logo: say is the product's name and nothing else (no address, no button).`,
     "Never: “Meet X”, “Not just X, it's Y”, “Unlock”, “the future of”, three one-word sentences in a row, hype words, another company's name, a number or claim the brief doesn't have.",
     "say: at most 7 words; sub: at most 10 words or empty. The seconds add up to the length.",
   ]
@@ -146,6 +147,8 @@ export function fixSpine(raw: unknown, carriers: Carrier[], b: Brief, length: nu
   // the end card: the name alone, the mark arriving and resolving (gate G3: held at most 1.4 s)
   const end = beats.at(-1)!
   beats[beats.length - 1] = { ...end, role: "cta", say: b.product, sub: undefined, seconds: 2.2 }
+  // the call in words: about 3 s (its time goes to the proofs)
+  for (const x of beats.slice(0, -1)) if (x.role === "cta" && x.carrier === "words") x.seconds = Math.min(x.seconds, 3)
   const rest = beats.slice(0, -1).reduce((a, x) => a + x.seconds, 0)
   beats = beats.map((x, i) => (i === beats.length - 1 ? x : { ...x, seconds: (x.seconds * (length - 2.2)) / rest }))
   beats = beats.map((x) => ({ ...x, buys: x.buys || `Buys ${x.role === "proof" ? "trust" : x.role === "hook" ? "attention" : "the answer"}: the viewer ${x.role === "proof" ? "sees it done" : "reads it"}.` }))
@@ -163,7 +166,8 @@ export const productShare = (s: Spine, carriers: Carrier[]) => {
 
 /** What the film is made with: the world under everything, the liquid mark, the shapes, by id; each recording's
     address once it's placed (`clip(id, start, seconds)`), each screen's. */
-export type Means = { world: string; mark: string; shapes: Record<string, string>; screen: (file: string) => string; clip: (file: string, start: number, seconds: number) => string }
+/** `light`: the brand lives on white: a light world, its mark and shapes multiplied over it, quiet ink grey on white */
+export type Means = { world: string; mark: string; shapes: Record<string, string>; screen: (file: string) => string; clip: (file: string, start: number, seconds: number) => string; light?: boolean }
 /** per shot: the device's screen and which device, where it starts, its energy (for the score), its meaning */
 export type Built = { script: TemplateScript; devices: ({ src: string; phone: boolean } | null)[]; starts: number[]; energy: number[]; meanings: Meaning[] }
 
@@ -193,7 +197,7 @@ function title(ad: ArtDirection, role: keyof ArtDirection["titles"], text: strin
 const fit = (text: string, w: number, want: number, lines = 2) => Math.min(want, (w * 100 * lines) / (Math.max(4, text.length) * 0.52))
 /** a full-frame video (the world, the mark, a shape); `crash`: it arrives decelerating from oversize, the way a logo
     lands (motionmaxxing law 7), and keeps a living drift */
-const video = (src: string, name: string, o: { blend?: boolean; box?: { x: number; y: number; w: number }; crash?: boolean; push?: number; dur: number }): ScriptLayer =>
+const video = (src: string, name: string, o: { blend?: boolean | "screen" | "multiply"; box?: { x: number; y: number; w: number }; crash?: boolean; push?: number; dur: number }): ScriptLayer =>
   ({
     kind: "image",
     name,
@@ -203,7 +207,7 @@ const video = (src: string, name: string, o: { blend?: boolean; box?: { x: numbe
     box: o.box ?? { x: 0.5, y: 0.5, w: 1 },
     radius: 0,
     enter: "none",
-    ...(o.blend ? { blend: "screen" } : {}),
+    ...(o.blend ? { blend: o.blend === true ? "screen" : o.blend } : {}),
     tweens: [
       ...(o.crash ? [{ prop: "scale", at: 0, dur: 0.55, from: [3.5], to: [1], ease: EXPO }, { prop: "opacity", at: 0, dur: 0.12, from: [0], to: [1], ease: "linear" }] : []),
       ...(o.push ? [{ prop: "scale", at: o.crash ? 0.55 : 0, dur: r2(o.dur - (o.crash ? 0.55 : 0)), from: [1], to: [1 + o.push], ease: CRUISE }] : []),
@@ -228,6 +232,10 @@ export function buildFilm(s: Spine, carriers: Carrier[], ad: ArtDirection, m: Me
   const energy: number[] = []
   const meanings: Meaning[] = []
   const world = (dur: number) => video(m.world, "World", { dur })
+  // over the world: a dark brand's mark and shapes are made on black and screened, a light one's on white and multiplied
+  const blend = m.light ? "multiply" : "screen"
+  const ground = m.light ? "#ffffff" : "#000000"
+  const quiet = m.light ? "#5b5b63" : "#b4b4bc"
   const add = (shot: ScriptShot, e: number, meaning: Meaning, device: Built["devices"][number] = null) => (shots.push(shot), energy.push(e), meanings.push(meaning), devices.push(device))
   const view = { from: { x: 0.5, y: 0.5, zoom: 1 }, to: { x: 0.5, y: 0.5, zoom: 1.05 }, ease: CRUISE }
   s.beats.forEach((x, i) => {
@@ -236,37 +244,48 @@ export function buildFilm(s: Spine, carriers: Carrier[], ad: ArtDirection, m: Me
     const end = i === s.beats.length - 1
     const meaning = (says: string, shows: string): Meaning => ({ role: x.role, buys: x.buys, says, carrier: x.carrier, shows })
     // a supporting line: 5 % of the frame's height or so (motionmaxxing's 5–7 % H), quieter ink
-    const sub = (y: number) => (x.sub ? [title(ad, "line", x.sub, { x: 0.5, y, w: 0.7 }, fit(x.sub, 0.7, 2.9, 1), { at: 0.45, font: "text", color: "#b4b4bc" })] : [])
+    const sub = (y: number) => (x.sub ? [title(ad, "line", x.sub, { x: 0.5, y, w: 0.7 }, fit(x.sub, 0.7, 2.9, 1), { at: 0.45, font: "text", color: quiet })] : [])
     if (!c || c.kind === "words") {
-      add({ name: `${x.role}: ${x.say}`.slice(0, 60), dur, cut: "cut", why: x.buys, ground: "#000000", view, layers: [world(dur), title(ad, x.role === "hook" ? "hook" : "feature", x.say, { x: 0.5, y: x.sub ? 0.46 : 0.5, w: 0.8 }, fit(x.say, 0.8, 6.2)), ...sub(0.6)] }, x.role === "hook" ? 1 : 3, meaning(x.say, "words on the film's world"))
+      add({ name: `${x.role}: ${x.say}`.slice(0, 60), dur, cut: "cut", why: x.buys, ground, view, layers: [world(dur), title(ad, x.role === "hook" ? "hook" : "feature", x.say, { x: 0.5, y: x.sub ? 0.46 : 0.5, w: 0.8 }, fit(x.say, 0.8, 6.2)), ...sub(0.6)] }, x.role === "hook" ? 1 : 3, meaning(x.say, "words on the film's world"))
     } else if (c.kind === "logo") {
       // the mark crashes in from oversize; the name lands under it; at the end it resolves and holds (≤ 1.4 s)
       add(
-        { name: `${x.role}: ${x.say}`.slice(0, 60), dur, cut: "cut", why: x.buys, ground: "#000000", layers: [world(dur), video(m.mark, "Mark", { blend: true, box: { x: 0.5, y: 0.4, w: 0.9 }, crash: true, push: end ? 0.015 : 0.04, dur }), title(ad, "name", x.say, { x: 0.5, y: 0.74, w: 0.6 }, fit(x.say, 0.6, 3.4, 1), { at: 0.35 }), ...(end ? [] : sub(0.82))] },
+        { name: `${x.role}: ${x.say}`.slice(0, 60), dur, cut: "cut", why: x.buys, ground, layers: [world(dur), video(m.mark, "Mark", { blend, box: { x: 0.5, y: 0.4, w: 0.9 }, crash: true, push: end ? 0.015 : 0.04, dur }), title(ad, "name", x.say, { x: 0.5, y: 0.74, w: 0.6 }, fit(x.say, 0.6, 3.4, 1), { at: 0.35 }), ...(end ? [] : sub(0.82))] },
         end ? 2 : 2,
         meaning(x.say, "the product's mark in liquid metal, its name"),
       )
     } else if (c.kind === "shape") {
       // the shape stands right of its line, small enough never to reach it
-      add({ name: `${x.role}: ${x.say}`.slice(0, 60), dur, cut: "cut", why: x.buys, ground: "#000000", layers: [world(dur), video(m.shapes[c.id] ?? m.world, "Shape", { blend: true, box: { x: 0.74, y: 0.5, w: 0.62 }, push: 0.05, dur }), title(ad, "feature", x.say, { x: 0.27, y: x.sub ? 0.46 : 0.5, w: 0.4 }, fit(x.say, 0.4, 4.2), { align: "left" }), ...(x.sub ? [title(ad, "line", x.sub, { x: 0.27, y: 0.6, w: 0.4 }, 1.6, { at: 0.45, font: "text", color: "#a1a1aa", align: "left" })] : [])] }, 2, meaning(x.say, c.what))
+      add({ name: `${x.role}: ${x.say}`.slice(0, 60), dur, cut: "cut", why: x.buys, ground, layers: [world(dur), video(m.shapes[c.id] ?? m.world, "Shape", { blend, box: { x: 0.74, y: 0.5, w: 0.62 }, push: 0.05, dur }), title(ad, "feature", x.say, { x: 0.27, y: x.sub ? 0.46 : 0.5, w: 0.4 }, fit(x.say, 0.4, 4.2), { align: "left" }), ...(x.sub ? [title(ad, "line", x.sub, { x: 0.27, y: 0.6, w: 0.4 }, 1.6, { at: 0.45, font: "text", color: quiet, align: "left" })] : [])] }, 2, meaning(x.say, c.what))
     } else {
       // show it, then say it: the claim in type, a hard cut, the product performing it, big, with nothing over it
       proved++
       const claim = r2(Math.min(1.5, Math.max(1.1, dur * 0.3)))
       const rest = r2(dur - claim)
       // (one claim, nothing under it: the product it cuts to is the rest of the sentence)
-      add({ name: `${x.role}: ${x.say}`.slice(0, 60), dur: claim, cut: "cut", why: x.buys, ground: "#000000", view, layers: [world(claim), title(ad, "feature", x.say, { x: 0.5, y: 0.5, w: 0.8 }, fit(x.say, 0.8, 5.2))] }, 2, meaning(x.say, "the claim in type"))
+      add({ name: `${x.role}: ${x.say}`.slice(0, 60), dur: claim, cut: "cut", why: x.buys, ground, view, layers: [world(claim), title(ad, "feature", x.say, { x: 0.5, y: 0.5, w: 0.8 }, fit(x.say, 0.8, 5.2))] }, 2, meaning(x.say, "the claim in type"))
       const at = shots.reduce((a, sh) => a + sh.dur, 0)
       const e = 2 + Math.round(proved / Math.max(1, proofs))
       if (c.kind === "clip")
         add(
-          { name: `${x.role}: ${x.say} (the product)`.slice(0, 60), dur: rest, cut: "cut", why: x.buys, ground: "#000000", layers: [world(rest), { kind: "image", name: "Recording", src: m.clip(c.file!, at, rest), file: "recording", aspect: 1.6, box: { x: 0.5, y: 0.5, w: 0.84 }, radius: 0.8, enter: "none", tweens: [{ prop: "scale", at: 0, dur: 0.5, from: [1.06], to: [1], ease: EXPO }, { prop: "scale", at: 0.5, dur: r2(rest - 0.5), from: [1], to: [1.03], ease: CRUISE }] } as ScriptLayer] },
+          { name: `${x.role}: ${x.say} (the product)`.slice(0, 60), dur: rest, cut: "cut", why: x.buys, ground, layers: [world(rest), { kind: "image", name: "Recording", src: m.clip(c.file!, at, rest), file: "recording", aspect: 1.6, box: { x: 0.5, y: 0.5, w: 0.84 }, radius: 0.8, enter: "none", tweens: [{ prop: "scale", at: 0, dur: 0.5, from: [1.06], to: [1], ease: EXPO }, { prop: "scale", at: 0.5, dur: r2(rest - 0.5), from: [1], to: [1.03], ease: CRUISE }] } as ScriptLayer] },
           e,
           meaning("", c.what),
         )
-      else
+      else if (!c.phone) {
+        // a desktop screen is read by the camera, not on a laptop: big and flat, pushing into where to look
+        const f = c.focus ?? { x: 0.5, y: 0.42 }
+        const zoom = 0.22
+        const dx = r2(-(f.x - 0.5) * 0.84 * zoom)
+        const dy = r2(-(f.y - 0.5) * ((0.84 / 1.6) * (16 / 9)) * zoom)
         add(
-          { name: `${x.role}: ${x.say} (the product)`.slice(0, 60), dur: rest, cut: "cut", why: x.buys, ground: "#000000", layers: [world(rest)], device: { id: c.phone ? "iphone" : "macbook", from: { angle: proved % 2 ? "hero" : "heroLeft", zoom: 1.24, rise: -0.02 }, to: { angle: "front", zoom: 1.4, rise: -0.02 }, ease: CRUISE } },
+          { name: `${x.role}: ${x.say} (the product)`.slice(0, 60), dur: rest, cut: "cut", why: x.buys, ground, layers: [world(rest), { kind: "image", name: "Screen", src: m.screen(c.file!), file: "screen", aspect: 1.6, box: { x: 0.5, y: 0.5, w: 0.84 }, radius: 0.8, enter: "none", tweens: [{ prop: "scale", at: 0, dur: 0.5, from: [1.06], to: [1], ease: EXPO }, { prop: "scale", at: 0.5, dur: r2(rest - 0.5), from: [1], to: [1 + zoom], ease: CRUISE }, { prop: "position", at: 0.5, dur: r2(rest - 0.5), from: [0, 0], to: [dx, dy], ease: CRUISE }] } as ScriptLayer] },
+          e,
+          meaning("", c.what),
+        )
+      } else
+        add(
+          { name: `${x.role}: ${x.say} (the product)`.slice(0, 60), dur: rest, cut: "cut", why: x.buys, ground, layers: [world(rest)], device: { id: c.phone ? "iphone" : "macbook", from: { angle: proved % 2 ? "hero" : "heroLeft", zoom: 1.24, rise: -0.02 }, to: { angle: "front", zoom: 1.4, rise: -0.02 }, ease: CRUISE } },
           e,
           meaning("", c.what),
           { src: m.screen(c.file!), phone: !!c.phone },
@@ -275,7 +294,7 @@ export function buildFilm(s: Spine, carriers: Carrier[], ad: ArtDirection, m: Me
   })
   const starts = shots.reduce<number[]>((a, _, i) => [...a, i ? a[i - 1] + shots[i - 1].dur : 0], [])
   return {
-    script: { id: `directed-${Date.now().toString(36)}`, name: `${o.name}: directed`, version: 1, source: "director", summary: s.promise, size: o.size ?? "16x9", ground: "#000000", light: "dramatic", why: [s.signature], avoid: [], shots, artist: { style: ad.id, story: "launch", pieces: meanings.map((x) => x.role) } },
+    script: { id: `directed-${Date.now().toString(36)}`, name: `${o.name}: directed`, version: 1, source: "director", summary: s.promise, size: o.size ?? "16x9", ground, light: m.light ? "studio" : "dramatic", why: [s.signature], avoid: [], shots, artist: { style: ad.id, story: "launch", pieces: meanings.map((x) => x.role) } },
     devices,
     starts,
     energy,

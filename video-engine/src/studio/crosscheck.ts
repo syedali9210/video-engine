@@ -37,10 +37,10 @@ export function lintFilm(c: { scenes: S[] }): Finding[] {
       if (SLOGAN.test(l.text!)) out.push({ gate: "copy", level: "fail", scene: i, text: `“${l.text}” is slogan copy.`, fix: "Say what it does, plainly, in the audience's words." })
     }
     // deck layout: a title stacked over the product (say it, then show it: a cut between, not a header)
-    const product = s.layers.some((l) => l.kind === "device") || s.layers.some((l) => l.kind === "image" && l.name === "Recording")
+    const product = s.layers.some((l) => l.kind === "device") || s.layers.some((l) => l.kind === "image" && (l.name === "Recording" || l.name === "Screen"))
     if (product && t.some((l) => (l.box?.y ?? 0.5) < 0.22)) out.push({ gate: "deck layout", level: "fail", scene: i, text: "A title sits over the product, like a slide.", fix: "Show the claim on its own, then cut to the product doing it, with nothing over it." })
     // G1: the proof reads: the product big enough to read on a phone
-    const rec = s.layers.find((l) => l.kind === "image" && l.name === "Recording")
+    const rec = s.layers.find((l) => l.kind === "image" && (l.name === "Recording" || l.name === "Screen"))
     if (rec && (rec.box?.w ?? 1) < 0.55) out.push({ gate: "G1 proof readable", level: "fail", scene: i, text: `The recording is ${Math.round((rec.box?.w ?? 0) * 100)}% of the frame's width (55% at least).`, fix: "Show it bigger, or magnify the part that matters." })
     if (s.layers.some((l) => l.kind === "device") && Math.max(s.camera?.zoom ?? 1, s.camera2?.zoom ?? 0) < 1.1) out.push({ gate: "G1 proof readable", level: "warn", scene: i, text: "The device is small in the frame: its screen won't read.", fix: "Push in: the screen at half the frame or more." })
     // meaning: every shot buys something
@@ -48,7 +48,7 @@ export function lintFilm(c: { scenes: S[] }): Finding[] {
     else if (!s.meaning.buys) out.push({ gate: "meaning", level: "warn", scene: i, text: `“${s.name ?? `Shot ${i + 1}`}” buys nothing.`, fix: "Write what the viewer believes after it, or cut it." })
   })
   // the product is the film: on screen (a device, a recording, a template's own shot of it) a third of it at least
-  const onScreen = c.scenes.filter((s) => s.layers.some((l) => l.kind === "device" || l.kind === "component" || (l.kind === "image" && l.name === "Recording"))).reduce((a, s) => a + s.duration, 0)
+  const onScreen = c.scenes.filter((s) => s.layers.some((l) => l.kind === "device" || l.kind === "component" || (l.kind === "image" && (l.name === "Recording" || l.name === "Screen")))).reduce((a, s) => a + s.duration, 0)
   if (onScreen < total / 3) out.push({ gate: "product", level: "fail", text: `The product is on screen ${Math.round((onScreen / total) * 100)}% of the film (a third at least: proofs are half of a good one).`, fix: "Carry the proofs on the product's recordings and screens, not on words or shapes." })
   // almost nothing fades between beats (motionmaxxing law 6)
   const fades = c.scenes.slice(1).filter((s) => FADES.has(s.transition ?? "cut")).length

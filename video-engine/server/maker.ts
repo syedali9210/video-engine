@@ -101,7 +101,7 @@ export function maker(): Plugin {
         R: (await server.ssrLoadModule("/src/registry.ts")) as { byId: (id: string) => { params?: Record<string, unknown>; film?: { size: string; end: number; shots: { at: number; energy: number; enter: string }[] } } | undefined },
       })
       // the director's module as the server uses it (its own types would pull the app into the server's check)
-      type Carrier = { id: string; kind: "words" | "logo" | "device" | "clip" | "shape"; what: string; file?: string; seconds?: number; phone?: boolean }
+      type Carrier = { id: string; kind: "words" | "logo" | "device" | "clip" | "shape"; what: string; file?: string; seconds?: number; phone?: boolean; focus?: { x: number; y: number } }
       type SpineT = { promise: string; throughline: string; signature: string; beats: { role: string; buys: string; say: string; sub?: string; carrier: string; seconds: number }[] }
       type MeaningT = { role: string; buys: string; says: string; carrier: string; shows: string }
       type DirectionT = { id: string; name: string; hint: string; energy: number; tempo: number }
@@ -109,7 +109,7 @@ export function maker(): Plugin {
         spineRequest: (b: Brief, c: Carrier[], o: { length: number; tone: string; notes?: string }) => { schema: { name: string; schema: object }; messages: { role: "system" | "user"; content: string }[] }
         fixSpine: (raw: unknown, c: Carrier[], b: Brief, length: number) => SpineT
         productShare: (s: SpineT, c: Carrier[]) => number
-        buildFilm: (s: SpineT, c: Carrier[], ad: DirectionT, m: { world: string; mark: string; shapes: Record<string, string>; screen: (file: string) => string; clip: (file: string, start: number, seconds: number) => string }, o: { size?: string; url?: string; name: string }) => { script: unknown; devices: ({ src: string; phone: boolean } | null)[]; starts: number[]; energy: number[]; meanings: MeaningT[] }
+        buildFilm: (s: SpineT, c: Carrier[], ad: DirectionT, m: { light?: boolean; world: string; mark: string; shapes: Record<string, string>; screen: (file: string) => string; clip: (file: string, start: number, seconds: number) => string }, o: { size?: string; url?: string; name: string }) => { script: unknown; devices: ({ src: string; phone: boolean } | null)[]; starts: number[]; energy: number[]; meanings: MeaningT[] }
         METAPHORS: { id: string; means: string }[]
       }
       type CompT = { size: string; fps: number; music?: unknown; scenes: { duration: number; name?: string; transition?: string; meaning?: MeaningT; layers: { kind: string; anim?: string; values?: Record<string, unknown> }[] }[] }
@@ -382,7 +382,9 @@ export function maker(): Plugin {
           f = await direct({ ...o, notes: [o.notes, card.notes].filter(Boolean).join(" ") })
           card = await review(f)
           cards.push({ id: f.id, card })
-          if (M.weakest(card) > M.weakest(best.card)) best = { f, card }
+          // passing the gates first (a fail is fixed, never argued), then the weakest score
+          const fails = (c: typeof card) => c.lint.filter((x) => x.level === "fail").length
+          if (fails(card) < fails(best.card) || (fails(card) === fails(best.card) && M.weakest(card) > M.weakest(best.card))) best = { f, card }
         }
         return { film: load(best.f.id) ?? best.f, card: best.card, cards }
       }
@@ -403,7 +405,7 @@ export function maker(): Plugin {
         const carriers: Carrier[] = [
           { id: "words", kind: "words", what: "the line alone, big, on the film's world" },
           { id: "logo", kind: "logo", what: "the product's mark forming in liquid metal, its name under it" },
-          ...k.files.filter((f) => f.kind === "desktop" || f.kind === "phone").map((f) => ({ id: `screen:${f.id.slice(0, 8)}`, kind: "device" as const, file: f.id, phone: f.kind === "phone", what: `its screen on a ${f.kind === "phone" ? "phone" : "laptop"}: ${f.shows ?? f.name}` })),
+          ...k.files.filter((f) => f.kind === "desktop" || f.kind === "phone").map((f) => ({ id: `screen:${f.id.slice(0, 8)}`, kind: "device" as const, file: f.id, phone: f.kind === "phone", focus: f.focus, what: `its screen on a ${f.kind === "phone" ? "phone" : "laptop"}: ${f.shows ?? f.name}` })),
           ...k.files.filter((f) => f.kind === "clip").map((f) => ({ id: `clip:${f.id.slice(0, 8)}`, kind: "clip" as const, file: f.id, seconds: f.dur, what: `a recording of someone using it: ${(f.name.split(": ").slice(1).join(": ") || f.shows) ?? f.name}` })),
           // the generator's shapes, each one idea: only the ones a beat uses are made
           ...SP.METAPHORS.map((x) => ({ id: x.id, kind: "shape" as const, what: `a shape: ${x.means}` })),
@@ -420,7 +422,7 @@ export function maker(): Plugin {
         const res = await gen.forFilm(k, [...new Set(spine.beats.map((x) => x.carrier).filter((c) => c.startsWith("shape:")))])
         step(log, "world, mark and shapes", t0, null, `${Object.keys(res.shapes).length} shapes: ${Object.keys(res.shapes).join(", ") || "none"}`)
         t0 = Date.now()
-        const built = SP.buildFilm(spine, carriers, ad, { world: res.world, mark: res.mark, shapes: res.shapes, screen: (file) => k.files.find((f) => f.id === file)!.url, clip: (file, start, seconds) => placeClip(k, file, start, seconds) }, { size: o.size ?? "16x9", url: brief.url, name: brief.product })
+        const built = SP.buildFilm(spine, carriers, ad, { light: res.light, world: res.world, mark: res.mark, shapes: res.shapes, screen: (file) => k.files.find((f) => f.id === file)!.url, clip: (file, start, seconds) => placeClip(k, file, start, seconds) }, { size: o.size ?? "16x9", url: brief.url, name: brief.product })
         const accent = k.brand.accent || k.brand.ink || "#ededed"
         const brand = { name: brief.product, bg: k.brand.ground ?? "#000000", surface: "#111113", ink: k.brand.ink ?? "#ededed", muted: "#a1a1aa", accent, onAccent: "#0b0b0c", font: k.brand.text ?? "", display: k.brand.display ?? "", mono: "", radius: k.brand.radius ?? 12, dark, fonts: k.brand.fonts ?? [] }
         let comp = SC.compileScript(built.script, { device: "macbook", posture: "open", anim: "maze-walk", copy: { ...P.kitCopy(k), name: brief.product }, brand, accent })

@@ -42,13 +42,17 @@ export function generator(o: { origin: () => string; root: string; media: string
   function palette(k: ProductKit) {
     const accent = k.brand.accent && k.brand.accent !== k.brand.ink ? k.brand.accent : null
     const ramp = accent ? [mix(accent, "#000000", 0.8), mix(accent, "#000000", 0.4), accent, mix(accent, "#ffffff", 0.7)] : ["#121215", "#45454d", "#a3a3ad", "#f3f3f6"]
-    return { accent, ramp }
+    // a light brand (a white ground) gets a light world, and its shapes and mark are made on white (multiplied over it)
+    const g = k.brand.ground ?? "#000000"
+    const light = (parseInt(g.slice(1, 3), 16) + parseInt(g.slice(3, 5), 16) + parseInt(g.slice(5, 7), 16)) / 3 > 160
+    return { accent, ramp, light, bg: light ? "#ffffff" : "#000000" }
   }
 
   /** The world: a dark grainy field with one lit fold, in the accent (or silver), slow enough to sit under words. */
   const worldSpec = (k: ProductKit) => {
-    const { accent } = palette(k)
-    return { kind: "gradient", name: "World", duration: 8, bg: "#000000", grain: 0.1, mesh: "water", colors: accent ? [mix(accent, "#000000", 0.55), mix(accent, "#000000", 0.15), "#000000"] : ["#202027", "#6a6a76", "#000000"], density: 0.75, strength: 1.4, speed: 0.2, frequency: 5.5, amplitude: 0, brightness: 0.62, light: 0, cam: { az: 180, polar: 100, dist: 2.6, zoom: 1 }, pos: [0, 0, 0], rot: [0, 0, 200], orbit: 0 }
+    const { accent, light } = palette(k)
+    const colors = light ? (accent ? [mix(accent, "#ffffff", 0.82), "#ffffff", mix(accent, "#ffffff", 0.6)] : ["#ececef", "#ffffff", "#d3d3d9"]) : accent ? [mix(accent, "#000000", 0.55), mix(accent, "#000000", 0.15), "#000000"] : ["#202027", "#6a6a76", "#000000"]
+    return { kind: "gradient", name: light ? "Light world" : "World", duration: 8, bg: light ? "#ffffff" : "#000000", grain: light ? 0.06 : 0.1, mesh: "water", colors, density: 0.75, strength: 1.4, speed: 0.2, frequency: 5.5, amplitude: 0, brightness: light ? 1.02 : 0.62, light: 0, cam: { az: 180, polar: 100, dist: 2.6, zoom: 1 }, pos: [0, 0, 0], rot: [0, 0, 200], orbit: 0 }
   }
 
   /** The product's mark as a shape for the liquid: the lines of its logo picked out from the tile they sit on (a logo
@@ -66,12 +70,12 @@ export function generator(o: { origin: () => string; root: string; media: string
     const r = (await fetch(`${o.origin()}/__shader/logo`, { method: "POST", headers: { "content-type": "image/png" }, body: readFileSync(out) }).then((x) => x.json())) as { url?: string }
     return r.url ? { type: "image", src: r.url } : { type: "text", text: (k.words.name || k.name)[0] ?? "•" }
   }
-  const markSpec = async (k: ProductKit) => ({ kind: "liquid", name: "Mark", duration: 8, bg: "#000000", grain: 0.05, logo: await markShape(k), size: 0.72, noise: 4, contour: 0.6, rim: 0.35, speed: 0.4, iterations: 15, scale: 3.12, dot: 0.04, dotMul: 0.21, vOffset: 5.1, intensity: 0.07, exp: 0.2, rgb: palette(k).accent ? [1.1, 0.7, 0.9] : [1.1, 1.0, 1.05], shift: 0.9, edge: 0.4 })
+  const markSpec = async (k: ProductKit) => ({ kind: "liquid", name: palette(k).light ? "Mark on white" : "Mark", duration: 8, bg: palette(k).bg, grain: 0.05, logo: await markShape(k), size: 0.72, noise: 4, contour: 0.6, rim: 0.35, speed: 0.4, iterations: 15, scale: 3.12, dot: 0.04, dotMul: 0.21, vOffset: 5.1, intensity: 0.07, exp: 0.2, rgb: palette(k).accent ? [1.1, 0.7, 0.9] : [1.1, 1.0, 1.05], shift: 0.9, edge: 0.4 })
 
   /** A shape metaphor in the brand's ramp, on black (laid over the world with a screen blend in a film). */
   const shapeSpec = (k: ProductKit, id: string) => {
-    const { accent, ramp } = palette(k)
-    const base = { kind: "shape", duration: 8, bg: "#000000", grain: 0.06, count: 4, gap: 0.35, round: 0.3, axis: "across", angle: 45, density: 1, faces: "all", base: mix(ramp[0], "#000000", 0.3), flow: 0.3, speed: 0.25, glass: 0, glow: 0, under: "", motion: "turn", tilt: 28, dist: 7, spin: 0.25, colors: ramp }
+    const { accent, ramp, bg } = palette(k)
+    const base = { kind: "shape", duration: 8, bg, grain: 0.06, count: 4, gap: 0.35, round: 0.3, axis: "across", angle: 45, density: 1, faces: "all", base: mix(ramp[0], "#000000", 0.3), flow: 0.3, speed: 0.25, glass: 0, glow: 0, under: "", motion: "turn", tilt: 28, dist: 7, spin: 0.25, colors: ramp }
     const glow = accent ?? "#d8d8de"
     const by: Record<string, Record<string, unknown>> = {
       "shape:formats": { name: "Every format", form: "slabs", count: 6, gap: 0.3, round: 0.4, axis: "stack", flow: 0.2, motion: "fan", tilt: 34, dist: 9.5 },
@@ -91,7 +95,7 @@ export function generator(o: { origin: () => string; root: string; media: string
     shape: (k: ProductKit, id: string) => render(shapeSpec(k, id)),
     /** whichever of these a film needs, made (or found kept) */
     async forFilm(k: ProductKit, shapes: string[]) {
-      return { world: await this.world(k), mark: await this.mark(k), shapes: Object.fromEntries(await Promise.all(shapes.map(async (id) => [id, await this.shape(k, id)] as const))) }
+      return { light: palette(k).light, world: await this.world(k), mark: await this.mark(k), shapes: Object.fromEntries(await Promise.all(shapes.map(async (id) => [id, await this.shape(k, id)] as const))) }
     },
   }
 }
