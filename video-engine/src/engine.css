@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./design/tokens.css";
 @source ".";
 
 @custom-variant dark (&:is(.dark *));
@@ -53,8 +54,21 @@
   --color-k-motion: var(--k-motion);
   --color-k-effect: var(--k-effect);
 
-  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-code);
+  --font-serif: var(--font-display);
+
+  /* the semantic surfaces as utilities (bg-panel, bg-stage, bg-hover…); the older names (bg-surface, text-fg-2) still
+     work and point at the same tokens */
+  --color-app: var(--bg-app);
+  --color-panel: var(--bg-panel);
+  --color-stage: var(--bg-stage);
+  --color-subtle: var(--bg-subtle);
+  --color-hover: var(--bg-hover);
+  --color-selected: var(--bg-selected);
+  --color-raised: var(--bg-raised);
+  --color-inverse: var(--bg-inverse);
+  --color-selection: var(--selection);
 
   /* type scale: one name per job, so sizes stop drifting */
   --text-micro: 11px;
@@ -73,8 +87,10 @@
   --text-lead--line-height: 22px;
   --text-section: 20px;
   --text-section--line-height: 26px;
-  --text-page: 36px;
-  --text-page--line-height: 40px;
+  --text-page: 32px;
+  --text-page--line-height: 38px;
+  --text-hero: 44px;
+  --text-hero--line-height: 48px;
 
   --shadow-xs: var(--sh-xs);
   --shadow-sm: var(--sh-sm);
@@ -87,34 +103,12 @@
 }
 
 :root {
-  /* Geist (Vercel's design system), measured: neutral greys, one blue, hairlines instead of boxes */
+  /* colours, space, type and motion live in design/tokens.css; these are the work's own marks and a few legacy
+     depths the editors still use */
   color-scheme: light;
-  --canvas: #fafafa; /* background-200: the ground pages sit on */
-  --surface: #ffffff; /* background-100: panels, cards, the header */
-  --surface-2: #f5f5f5; /* gray-100: hover, wells */
-  --surface-3: #ebebeb; /* gray-200: pressed, the active segment's well */
-  --overlay: #ffffff;
-  --line: rgb(0 0 0 / 0.08); /* gray-alpha-400 */
-  --line-strong: rgb(0 0 0 / 0.14);
-  --fg: #171717; /* gray-1000, 17:1 */
-  --fg-2: #5c5c5c; /* 6.6:1 */
-  --fg-3: #737373; /* 4.7:1 on white, 4.5:1 on #fafafa */
-  --accent: #171717;
-  --accent-hover: #383838;
-  --accent-ink: #171717;
-  --accent-soft: rgb(0 0 0 / 0.05);
-  --on-accent: #ffffff;
-  --good: #29a383;
-  --good-ink: #12805c;
-  --warn: #e5a00d;
-  --warn-ink: #a35200;
-  --bad: #e5484d;
-  --bad-ink: #cb2a2f;
-  --control-off: #d4d4d4;
-  --track-off: #ebebeb;
-  /* selection and focus: one blue (Vercel's blue-700 family); the kinds stay for the work's own marks */
-  --sel: #006bff;
-  --sel-ink: #005be7;
+  --control-off: #cfcfca;
+  --track-off: var(--gray-5);
+  /* each kind of thing in a film has its own colour, the same wherever it shows */
   --k-scene: #0a7cf0;
   --k-device: #0b968a;
   --k-component: #b36b05;
@@ -127,56 +121,18 @@
   --k-effect: #c8461c;
   --slider-fill: rgb(0 0 0 / 0.06);
   --slider-fill-hover: rgb(0 0 0 / 0.09);
-  --tip-bg: #171717;
-  --tip-fg: #fafafa;
-  --veil: #fafafa;
   --sh-xs: 0 1px 1px rgb(0 0 0 / 0.04);
   --sh-sm: 0 0 0 1px rgb(0 0 0 / 0.08), 0 1px 2px rgb(0 0 0 / 0.04);
-  --sh-md: 0 0 0 1px rgb(0 0 0 / 0.08), 0 4px 8px -2px rgb(0 0 0 / 0.04), 0 16px 24px -8px rgb(0 0 0 / 0.08);
-  --sh-lg: 0 0 0 1px rgb(0 0 0 / 0.08), 0 8px 16px -4px rgb(0 0 0 / 0.06), 0 24px 48px -12px rgb(0 0 0 / 0.14);
   --sh-device: 0 1px 1px rgb(0 0 0 / 0.06), 0 6px 12px -6px rgb(0 0 0 / 0.12), 0 24px 48px -20px rgb(0 0 0 / 0.22);
-  --sh-panel: 0 0 0 1px rgb(0 0 0 / 0.08);
-  /* depth is a hairline, not a bevel: the lit edge is gone in light, a whisper in dark */
+  --sh-panel: 0 0 0 1px var(--border-1);
+  /* no bevels: depth is tone, and a hairline only where tone can't do it */
   --in-hi: 0 0 #0000;
-  --in-well: inset 0 0 0 1px rgb(0 0 0 / 0.08);
-  --btn-ink: #171717;
-  --btn-ink-sh: 0 0 0 1px #171717;
-  --btn-2: #ffffff;
-  --btn-2-sh: 0 0 0 1px rgb(0 0 0 / 0.12), 0 1px 2px rgb(0 0 0 / 0.04);
-  /* the signature: one gradient for the engine's own graphics (never for chrome) */
-  --brand-1: #3d6bff;
-  --brand-2: #8b5cf6;
-  --brand-3: #ff6fae;
-  --brand: linear-gradient(135deg, var(--brand-1), var(--brand-2) 55%, var(--brand-3));
-  --scrim: rgb(0 0 0 / 0.24);
+  --in-well: none;
 }
 .dark {
   color-scheme: dark;
-  --canvas: #000000; /* background-200 */
-  --surface: #0a0a0a; /* background-100 */
-  --surface-2: #1a1a1a; /* gray-100 */
-  --surface-3: #242424;
-  --overlay: #111111;
-  --line: rgb(255 255 255 / 0.09);
-  --line-strong: rgb(255 255 255 / 0.15);
-  --fg: #ededed; /* gray-1000 */
-  --fg-2: #a1a1a1; /* gray-900, 8:1 */
-  --fg-3: #878787; /* 5.6:1 on #0a0a0a */
-  --accent: #ededed;
-  --accent-hover: #ffffff;
-  --accent-ink: #ededed;
-  --accent-soft: rgb(255 255 255 / 0.07);
-  --on-accent: #0a0a0a;
-  --good: #29a383;
-  --good-ink: #4cc38a;
-  --warn: #f5b334;
-  --warn-ink: #ffb224;
-  --bad: #e5484d;
-  --bad-ink: #ff6166;
-  --control-off: #333333;
-  --track-off: #1f1f1f;
-  --sel: #0a84ff;
-  --sel-ink: #52a8ff;
+  --control-off: #3a3a3f;
+  --track-off: var(--gray-5);
   --k-scene: #4aa5ff;
   --k-device: #2fd0bd;
   --k-component: #f2ae45;
@@ -189,22 +145,12 @@
   --k-effect: #ff8159;
   --slider-fill: rgb(255 255 255 / 0.08);
   --slider-fill-hover: rgb(255 255 255 / 0.12);
-  --tip-bg: #ededed;
-  --tip-fg: #0a0a0a;
-  --veil: #000000;
   --sh-xs: 0 0 #0000;
   --sh-sm: 0 0 0 1px rgb(255 255 255 / 0.1);
-  --sh-md: 0 0 0 1px rgb(255 255 255 / 0.12), 0 16px 32px -8px rgb(0 0 0 / 0.7);
-  --sh-lg: 0 0 0 1px rgb(255 255 255 / 0.12), 0 32px 64px -16px rgb(0 0 0 / 0.8);
   --sh-device: 0 1px 1px rgb(0 0 0 / 0.5), 0 24px 48px -20px rgb(0 0 0 / 0.7);
-  --sh-panel: 0 0 0 1px rgb(255 255 255 / 0.09);
-  --in-hi: inset 0 1px 0 rgb(255 255 255 / 0.04);
-  --in-well: inset 0 0 0 1px rgb(255 255 255 / 0.1);
-  --btn-ink: #ededed;
-  --btn-ink-sh: 0 0 0 1px #ededed;
-  --btn-2: #0a0a0a;
-  --btn-2-sh: 0 0 0 1px rgb(255 255 255 / 0.15);
-  --scrim: rgb(0 0 0 / 0.5);
+  --sh-panel: 0 0 0 1px var(--border-1);
+  --in-hi: 0 0 #0000;
+  --in-well: none;
 }
 
 /* in layers, so Tailwind utilities can always override them */
@@ -222,7 +168,7 @@
     overflow: hidden;
     background: var(--canvas);
     color: var(--fg);
-    font-family: var(--font-sans);
+    font-family: var(--font-ui);
     font-size: 13px;
     line-height: 18px;
     -webkit-font-smoothing: antialiased;
@@ -233,7 +179,7 @@
     border-color: var(--line);
   }
   ::selection {
-    background: var(--accent-soft);
+    background: var(--selection-soft);
   }
   :focus-visible {
     outline: 2px solid var(--sel);
@@ -664,10 +610,11 @@ html:not(.tips) .hint {
 
 /* ---- floating panels: every side panel, dock and sheet sits on the ground as a card ---- */
 @layer components {
+  /* something floating over the work: a tool window, a notice, a sheet */
   .panel {
-    background: var(--surface);
+    background: var(--bg-raised);
     border-radius: 16px;
-    box-shadow: var(--sh-panel);
+    box-shadow: var(--shadow-3);
   }
   /* a group of tools inside a panel or a dock: a darker well (the bottom toolbar's layout switcher) */
   .well {
@@ -686,12 +633,9 @@ html:not(.tips) .hint {
   align-items: center;
   gap: 2px;
   padding: 5px;
-  border-radius: 18px;
-  background: var(--glass);
-  /* a lighter blur: the page scrolls and changes under it, and every frame of that re-blurs what's behind */
-  -webkit-backdrop-filter: blur(18px) saturate(1.6);
-  backdrop-filter: blur(18px) saturate(1.6);
-  box-shadow: var(--glass-hi), 0 0 0 1px var(--glass-line), var(--glass-sh);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-3);
 }
 /* the way back out of an editor: the first thing on its dock */
 .dock-back {
@@ -720,23 +664,17 @@ html:not(.tips) .hint {
   transform: translateX(-2px);
 }
 .dock button.grid {
-  height: 36px;
-  width: 36px;
-  border-radius: 10px;
+  height: 34px;
+  width: 34px;
+  border-radius: var(--radius-md);
 }
 .dock button.grid svg {
   width: 18px;
   height: 18px;
 }
-.dock [role="radiogroup"] {
-  padding: 3px;
-  border-radius: 11px;
-  background: var(--surface-2);
-}
 .dock [role="radio"] {
-  height: 30px;
-  min-width: 34px;
-  border-radius: 8px;
+  height: 34px;
+  min-width: 30px;
 }
 .dock [role="radio"] svg {
   width: 17px;
@@ -751,8 +689,8 @@ html:not(.tips) .hint {
 }
 /* the ground a stage sits on: a quiet dot grid, the way a design tool's canvas reads as space */
 .stage-ground {
-  background-color: var(--canvas);
-  background-image: radial-gradient(var(--line-strong) 1px, transparent 1.2px);
+  background-color: var(--bg-stage);
+  background-image: radial-gradient(var(--border-1) 1px, transparent 1.2px);
   background-size: 20px 20px;
   background-position: -10px -10px;
 }
@@ -875,7 +813,7 @@ html:not(.tips) .hint {
    recessed, every press gives, and hover is a veil of the element's own colour ---- */
 @layer components {
   .panel {
-    box-shadow: var(--in-hi), var(--sh-panel);
+    box-shadow: var(--shadow-3);
   }
   .btn {
     position: relative;
@@ -1050,31 +988,36 @@ html.vt-swap::view-transition-new(root) {
   }
 }
 @layer components {
-  /* the mark: its handles breathe under the pointer, and it hops when it dances */
-  .live-logo .h1,
-  .live-logo .h2 {
-    transform-box: fill-box;
-    transform-origin: center;
-    transition: transform 300ms var(--ease-spring);
+  /* the mark: under the pointer its ghosts fall back along the arc; when it dances the dot runs the arc again */
+  .live-logo circle {
+    transform-box: view-box;
+    transition: transform var(--dur-3) var(--ease-spring), opacity var(--dur-2) ease;
   }
-  button:hover > .live-logo .h1 {
-    transform: translate(-1px, 1px) scale(1.25);
+  button:hover .live-logo .g1 {
+    transform: translate(-0.8px, 0.8px);
   }
-  button:hover > .live-logo .h2 {
-    transform: translate(1px, -1px) scale(1.25);
+  button:hover .live-logo .g2 {
+    transform: translate(-1.6px, 1.4px);
   }
-  .live-logo.dancing {
-    animation: logo-hop 1300ms var(--ease-spring);
+  button:hover .live-logo .dot {
+    transform: translate(0.6px, -0.5px);
   }
-  @keyframes logo-hop {
-    20% {
-      transform: translateY(-3px) rotate(-8deg);
+  .live-logo.dancing .dot {
+    animation: logo-run 900ms var(--ease-out) both;
+  }
+  .live-logo.dancing .g1 {
+    animation: logo-run 900ms var(--ease-out) 60ms both;
+  }
+  .live-logo.dancing .g2 {
+    animation: logo-run 900ms var(--ease-out) 120ms both;
+  }
+  @keyframes logo-run {
+    0% {
+      transform: translate(-11px, 9px) scale(0.5);
+      opacity: 0;
     }
-    45% {
-      transform: translateY(0) rotate(6deg);
-    }
-    70% {
-      transform: translateY(-2px) rotate(-3deg);
+    60% {
+      opacity: 1;
     }
   }
   /* z's drifting up off a sleeping list */
@@ -1133,7 +1076,8 @@ html.vt-swap::view-transition-new(root) {
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .live-logo.dancing,
+    .live-logo circle,
+    .live-logo.dancing circle,
     .snooze,
     .plane,
     .plane > span {
@@ -1144,6 +1088,10 @@ html.vt-swap::view-transition-new(root) {
     }
     .snooze {
       opacity: 1;
+    }
+    .live-logo circle {
+      transition: none;
+      transform: none !important;
     }
   }
 }
@@ -1186,199 +1134,27 @@ html.vt-swap::view-transition-new(root) {
   --glow-b: rgb(139 92 246 / 0.1);
 }
 
-.island-wrap {
-  position: fixed;
-  inset: auto 0 18px 0;
-  z-index: 45;
-  display: flex;
-  justify-content: center;
-  pointer-events: none;
-  padding: 0 16px;
-}
-.island {
-  pointer-events: auto;
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  max-width: 100%;
-  padding: 6px;
-  border-radius: 22px;
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(28px) saturate(1.8);
-  backdrop-filter: blur(28px) saturate(1.8);
-  box-shadow: var(--glass-hi), 0 0 0 1px var(--glass-line), var(--glass-sh);
-  animation: island-in 520ms var(--ease-out) both;
-}
-@keyframes island-in {
-  from {
-    opacity: 0;
-    transform: translateY(28px) scale(0.96);
-    filter: blur(6px);
-  }
-}
-.island-sep {
-  margin: 0 6px;
-  height: 24px;
-  width: 1px;
-  flex-shrink: 0;
-  background: var(--glass-line);
-}
-/* a place: its glyph and its name, always both */
-.island-item {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  height: 44px;
-  align-items: center;
-  gap: 8px;
-  padding: 0 14px 0 12px;
-  border-radius: 16px;
-  font-size: 13.5px;
-  font-weight: 500;
-  letter-spacing: -0.005em;
-  color: var(--fg-2);
-  white-space: nowrap;
-  transition: color 160ms var(--ease-out);
-}
-.island-item svg {
-  width: 19px;
-  height: 19px;
-  flex-shrink: 0;
-  transition: transform 260ms var(--ease-island);
-}
-.island-item:hover,
-.island-item[aria-current="page"] {
-  color: var(--fg);
-}
-@media (hover: hover) and (pointer: fine) {
-  .island-item:hover svg {
-    transform: translateY(-1.5px);
-  }
-}
-.island-item:active svg {
-  transform: scale(0.9);
-}
-/* where you are: a lit pill that springs from place to place */
-.island-pill {
-  position: absolute;
-  left: 0;
-  top: 6px;
-  height: 44px;
-  border-radius: 16px;
-  background: var(--glass-pill);
-  box-shadow: var(--glass-pill-hi);
-  /* it moves by transform alone, on the compositor (ui.tsx useFlip) */
-  transform-origin: 0 0;
-  will-change: transform;
-  pointer-events: none;
-}
-.island-icon {
-  position: relative;
-  display: grid;
-  height: 44px;
-  width: 44px;
-  place-items: center;
-  border-radius: 16px;
-  color: var(--fg-2);
-  transition:
-    color 160ms var(--ease-out),
-    background-color 160ms var(--ease-out);
-}
-.island-icon:hover,
-.island-icon[aria-expanded="true"] {
-  color: var(--fg);
-  background: var(--glass-pill);
-}
-.island-icon svg {
-  width: 19px;
-  height: 19px;
-}
-.island-new {
-  display: flex;
-  height: 44px;
-  align-items: center;
-  gap: 6px;
-  padding: 0 16px 0 13px;
-  border-radius: 16px;
-  background: var(--fg);
-  color: var(--surface);
-  font-size: 13.5px;
-  font-weight: 600;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 6px 16px -6px rgb(0 0 0 / 0.5);
-  transition: transform 160ms var(--ease-out);
-}
-.island-new svg {
-  width: 16px;
-  height: 16px;
-}
-.island-new:hover {
-  transform: translateY(-1px);
-}
-.island-new:active {
-  transform: scale(0.97);
-}
-.island-badge {
-  display: grid;
-  min-width: 18px;
-  height: 18px;
-  place-items: center;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: var(--sel);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.island-dot {
-  position: absolute;
-  right: 10px;
-  top: 10px;
-  height: 7px;
-  width: 7px;
-  border-radius: 999px;
-  background: var(--sel);
-  box-shadow: 0 0 0 2px var(--surface);
-}
-@media (max-width: 1080px) {
-  /* a narrower window: the places keep their glyphs and lose their names (each still says it on hover) */
-  .island-item .label {
-    display: none;
-  }
-  .island-item {
-    padding: 0 12px;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .island,
-  .island-pill,
-  .island-item svg {
-    animation: none;
-    transition: none;
-  }
-}
+/* (round 31: the island is gone; the sidebar below carries the places) */
 
 /* a gallery page: a soft light from above (the engine's own blue and violet, barely there) over the ground */
 .page-ground {
   background:
-    radial-gradient(60% 40% at 18% -8%, var(--glow-a), transparent 70%),
-    radial-gradient(50% 36% at 82% -10%, var(--glow-b), transparent 70%),
-    var(--canvas);
+    radial-gradient(70% 34% at 50% -6%, var(--glow-a), transparent 72%),
+    radial-gradient(40% 26% at 88% -8%, var(--glow-b), transparent 70%),
+    var(--surface);
 }
 
-/* category pills: one row, the picked one lit, a pill that slides to it */
+/* categories: words in a row, the picked one in ink with a line under it that glides (no pills, no well) */
 .pills {
   position: relative;
   display: inline-flex;
   max-width: 100%;
-  gap: 2px;
-  padding: 4px;
-  border-radius: 14px;
-  background: var(--surface-2);
-  box-shadow: inset 0 0 0 1px var(--line);
+  gap: 20px;
   overflow-x: auto;
   scrollbar-width: none;
+  /* a row longer than its room fades at its end, so it reads as one that scrolls (not one that was cut off) */
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  padding-right: 24px;
 }
 .pills::-webkit-scrollbar {
   display: none;
@@ -1387,21 +1163,19 @@ html.vt-swap::view-transition-new(root) {
   position: relative;
   z-index: 1;
   display: flex;
-  height: 32px;
+  height: 34px;
   flex-shrink: 0;
   align-items: center;
-  gap: 7px;
-  padding: 0 12px;
-  border-radius: 10px;
-  font-size: 13px;
+  gap: 6px;
+  font-size: 13.5px;
   font-weight: 500;
-  color: var(--fg-3);
+  color: var(--text-3);
   white-space: nowrap;
-  transition: color 160ms var(--ease-out);
+  transition: color var(--dur-1) var(--ease-out);
 }
 .pill-item:hover,
 .pill-item[aria-selected="true"] {
-  color: var(--fg);
+  color: var(--text-1);
 }
 .pill-item svg {
   width: 15px;
@@ -1410,28 +1184,18 @@ html.vt-swap::view-transition-new(root) {
 .pill-item .n {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  color: var(--fg-3);
+  color: var(--text-3);
 }
 .pill-glide {
   position: absolute;
   left: 0;
-  top: 4px;
-  height: 32px;
-  border-radius: 10px;
-  background: var(--surface);
-  box-shadow: 0 0 0 1px var(--line-strong), 0 1px 2px rgb(0 0 0 / 0.12);
+  bottom: 2px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--text-1);
   transform-origin: 0 0;
   will-change: transform;
   pointer-events: none;
-}
-.dark .pill-glide {
-  background: var(--surface-3);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 0 0 1px var(--line);
-}
-@media (prefers-reduced-motion: reduce) {
-  .pill-glide {
-    transition: none;
-  }
 }
 
 /* a card in a gallery: the work big, its name and one line under it */
@@ -1440,22 +1204,23 @@ html.vt-swap::view-transition-new(root) {
    lifts 4 px onto a deeper shadow while its picture eases in a little; pressed, it gives. In dark the ground eats
    shadows, so a hairline and a lit top edge carry the edge and the shadow goes deep and black. */
 :root {
-  --tile-sh: 0 0 0 1px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 20px -8px rgb(0 0 0 / 0.1), 0 24px 48px -24px rgb(0 0 0 / 0.16);
-  --tile-sh-up: 0 0 0 1px rgb(0 0 0 / 0.08), 0 2px 4px rgb(0 0 0 / 0.04), 0 18px 36px -12px rgb(0 0 0 / 0.18), 0 44px 80px -30px rgb(0 0 0 / 0.26);
+  /* round 32: cards are the work itself, no frame; a hairline inside the picture keeps a white poster off a white page */
+  --tile-sh: none;
+  --tile-sh-up: none;
   --print-sh: 0 0 0 1px rgb(0 0 0 / 0.08), 0 2px 4px rgb(0 0 0 / 0.06), 0 14px 28px -12px rgb(0 0 0 / 0.38);
 }
 .dark {
-  --tile-sh: 0 0 0 1px rgb(255 255 255 / 0.08), inset 0 1px 0 rgb(255 255 255 / 0.05), 0 18px 40px -18px rgb(0 0 0 / 0.95);
-  --tile-sh-up: 0 0 0 1px rgb(255 255 255 / 0.15), inset 0 1px 0 rgb(255 255 255 / 0.08), 0 30px 60px -20px rgb(0 0 0 / 1);
+  --tile-sh: none;
+  --tile-sh-up: none;
   --print-sh: 0 0 0 1px rgb(255 255 255 / 0.12), 0 16px 32px -12px rgb(0 0 0 / 0.95);
 }
 .card-shot {
   position: relative;
   display: block;
   overflow: hidden;
-  border-radius: 16px;
-  background: var(--surface-2);
-  box-shadow: var(--tile-sh);
+  border-radius: var(--card-radius);
+  background: var(--bg-subtle);
+  box-shadow: none;
   transition:
     transform 260ms var(--ease-out),
     box-shadow 260ms var(--ease-out);
@@ -1463,10 +1228,17 @@ html.vt-swap::view-transition-new(root) {
 .card-shot > :first-child {
   transition: transform 600ms var(--ease-out);
 }
+.card-shot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--border-1);
+  pointer-events: none;
+}
 @media (hover: hover) and (pointer: fine) {
   .card:hover .card-shot {
-    transform: translateY(-4px);
-    box-shadow: var(--tile-sh-up);
+    transform: translateY(-3px);
   }
   .card:hover .card-shot > :first-child {
     transform: scale(1.035);
@@ -1507,8 +1279,8 @@ html.vt-swap::view-transition-new(root) {
   isolation: isolate;
   overflow: hidden;
   border-radius: 24px;
-  background: var(--surface);
-  box-shadow: var(--tile-sh);
+  background: transparent;
+  box-shadow: none;
   transition:
     transform 280ms var(--ease-out),
     box-shadow 280ms var(--ease-out);
@@ -1614,19 +1386,839 @@ html.vt-swap::view-transition-new(root) {
   left: 0;
   right: 0;
   top: 0;
-  border-radius: 11px;
-  background: var(--surface);
-  box-shadow: 0 0 0 1px var(--line-strong), 0 1px 2px rgb(0 0 0 / 0.12);
+  border-radius: var(--radius-md);
+  background: var(--bg-selected);
   transform-origin: 0 0;
   will-change: transform;
   pointer-events: none;
 }
-.dark .side-glide {
-  background: var(--surface-2);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 0 0 1px var(--line);
-}
 @media (prefers-reduced-motion: reduce) {
   .side-glide {
     transition: none;
+  }
+}
+
+/* ======================================================================================================================
+   Round 31: quiet, guided, alive. A sidebar on the ground carries the places (Home, Films, Creatives, Product, Lab),
+   New and Find; the page is a sheet beside it. Home opens on one composer and a row of ways to start. Long work
+   speaks in the engine's voice (Making: a ring, a verb that changes, a quip or a tip). Every motion below has a
+   reduced-motion twin at the foot of this block.
+   ====================================================================================================================== */
+:root {
+  --nav-hover: rgb(24 24 16 / 0.045);
+  --nav-on: #ffffff;
+  --nav-on-sh: 0 0 0 1px rgb(24 24 16 / 0.07), 0 1px 2px rgb(24 24 16 / 0.06);
+  --sheet-sh: 0 0 0 1px rgb(24 24 16 / 0.06), 0 1px 3px rgb(24 24 16 / 0.04), 0 12px 32px -18px rgb(24 24 16 / 0.12);
+  --glow-a: rgb(99 102 241 / 0.07);
+  --glow-b: rgb(236 72 153 / 0.04);
+}
+.dark {
+  --nav-hover: rgb(255 255 255 / 0.045);
+  --nav-on: #1c1c1e;
+  --nav-on-sh: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 0 0 1px rgb(255 255 255 / 0.07);
+  --sheet-sh: 0 0 0 1px rgb(255 255 255 / 0.065), 0 16px 40px -20px rgb(0 0 0 / 0.8);
+  --glow-a: rgb(99 102 241 / 0.09);
+  --glow-b: rgb(236 72 153 / 0.045);
+}
+
+/* ---- the frame: the sidebar on the ground, the page a sheet beside it ---- */
+.app-frame {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  background: var(--canvas);
+}
+.app-sheet {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  margin: 8px 8px 8px 0;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--sheet-sh);
+}
+
+/* ---- the sidebar ---- */
+.sidebar {
+  display: flex;
+  width: 240px;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 8px 10px 10px;
+  transition: width var(--dur-3) var(--ease-out);
+}
+.sidebar[data-collapsed="true"] {
+  width: 64px;
+}
+.side-top {
+  display: flex;
+  height: 40px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 4px 0 6px;
+  margin-bottom: 6px;
+}
+.side-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  transition: opacity var(--dur-2) var(--ease-out);
+}
+.sidebar[data-collapsed="true"] .side-label,
+.sidebar[data-collapsed="true"] .side-hide {
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+}
+.side-head {
+  padding: 16px 10px 6px;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--fg-3);
+  white-space: nowrap;
+  transition: opacity var(--dur-2) var(--ease-out);
+}
+.sidebar[data-collapsed="true"] .side-head {
+  opacity: 0;
+  height: 18px;
+  padding: 0;
+}
+.nav-list {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.nav-item {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  height: 36px;
+  width: 100%;
+  align-items: center;
+  gap: 11px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: var(--fg-2);
+  text-align: left;
+  white-space: nowrap;
+  transition:
+    color var(--dur-1) var(--ease-out),
+    background-color var(--dur-1) var(--ease-out);
+}
+.nav-item > svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  transition: transform var(--dur-3) var(--ease-spring);
+}
+.nav-item:hover {
+  color: var(--fg);
+  background: var(--nav-hover);
+}
+.nav-item[aria-current="page"] {
+  color: var(--fg);
+}
+@media (hover: hover) and (pointer: fine) {
+  .nav-item:hover > svg {
+    transform: scale(1.1) rotate(-4deg);
+  }
+}
+.nav-item:active > svg {
+  transform: scale(0.9);
+}
+.nav-item .kbd-hint {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-3);
+  opacity: 0;
+  transition: opacity var(--dur-1) var(--ease-out);
+}
+.nav-item:hover .kbd-hint,
+.nav-item:focus-visible .kbd-hint {
+  opacity: 1;
+}
+.nav-count {
+  margin-left: auto;
+  display: grid;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--sel);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.sidebar[data-collapsed="true"] .nav-count {
+  position: absolute;
+  right: 3px;
+  top: 3px;
+  min-width: 8px;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  font-size: 0;
+  box-shadow: 0 0 0 2px var(--canvas);
+}
+/* where you are: a raised card that glides from place to place */
+.nav-glide {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  border-radius: 10px;
+  background: var(--nav-on);
+  box-shadow: var(--nav-on-sh);
+  transform-origin: 0 0;
+  will-change: transform;
+  pointer-events: none;
+}
+/* New: the one ink button in the sidebar */
+.nav-new {
+  display: flex;
+  height: 38px;
+  width: 100%;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px 0 11px;
+  border-radius: 12px;
+  background: var(--fg);
+  color: var(--surface);
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.16), 0 6px 14px -8px rgb(0 0 0 / 0.5);
+  transition:
+    transform var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-2) var(--ease-out);
+}
+.nav-new > svg {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  transition: transform var(--dur-3) var(--ease-spring);
+}
+.nav-new:hover {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.16), 0 10px 22px -10px rgb(0 0 0 / 0.6);
+}
+.nav-new:hover > svg,
+.nav-new[aria-expanded="true"] > svg {
+  transform: rotate(90deg);
+}
+.nav-new:active {
+  transform: scale(0.97);
+}
+.sidebar[data-collapsed="true"] .nav-list {
+  width: 44px;
+}
+.sidebar[data-collapsed="true"] .nav-new,
+.sidebar[data-collapsed="true"] .nav-item {
+  width: 44px;
+  justify-content: center;
+  padding: 0;
+  gap: 0;
+}
+.nav-recent {
+  display: flex;
+  height: 32px;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border-radius: 9px;
+  font-size: 13px;
+  color: var(--fg-2);
+  text-align: left;
+  transition:
+    color var(--dur-1) var(--ease-out),
+    background-color var(--dur-1) var(--ease-out);
+}
+.nav-recent:hover {
+  color: var(--fg);
+  background: var(--nav-hover);
+}
+.nav-recent img,
+.nav-recent .thumb {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--surface-3);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+/* ---- Home: the composer, the ways to start, the guide ---- */
+.hero-title {
+  font-size: var(--text-hero);
+  line-height: var(--text-hero--line-height);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+@media (max-width: 1100px) {
+  .hero-title {
+    font-size: 36px;
+    line-height: 40px;
+  }
+}
+.serif {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-style: italic;
+  letter-spacing: -0.01em;
+}
+/* a tick that draws itself */
+.check-draw path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: check-draw 420ms var(--ease-out) 80ms forwards;
+}
+@keyframes check-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ---- making: a ring, a verb that changes, a line under it ---- */
+.making {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 14px;
+}
+.making-title {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+/* the verb shines across, from a grey that still reads well to full ink */
+.making-title .shimmer {
+  background-image: linear-gradient(90deg, var(--fg-2) 0%, var(--fg-2) 35%, var(--fg) 50%, var(--fg-2) 65%, var(--fg-2) 100%);
+}
+.making-lg .making-title {
+  font-size: 17px;
+  line-height: 24px;
+}
+.making-sm .making-title {
+  font-size: 13px;
+  line-height: 18px;
+}
+.pring-fill {
+  transition: stroke-dashoffset 500ms var(--ease-out);
+}
+.pring-spin {
+  animation: pring-spin 1.1s linear infinite;
+}
+@keyframes pring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes gerund-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.45em);
+    filter: blur(3px);
+  }
+}
+.gerund-in {
+  animation:
+    gerund-in 380ms var(--ease-out) both,
+    shimmer 1.8s linear infinite;
+}
+.quote-in {
+  animation: fade-in 600ms var(--ease-out) both;
+}
+
+/* ---- the render card: an export in progress, wherever you are in the Studio ---- */
+.render-card {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 85;
+  width: min(360px, calc(100vw - 32px));
+  padding: 14px 14px 14px 16px;
+  border-radius: 18px;
+  background: var(--overlay);
+  box-shadow: var(--sh-lg);
+  animation: card-in 380ms var(--ease-spring) both;
+}
+.render-card.small {
+  width: auto;
+  padding: 6px 12px 6px 6px;
+  border-radius: 999px;
+}
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+}
+.render-bar {
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-3);
+}
+.render-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--brand);
+  transition: width 500ms var(--ease-out);
+}
+
+/* ---- a toast: what just happened, with its glyph ---- */
+.toast {
+  display: flex;
+  max-width: min(520px, calc(100vw - 32px));
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px 9px 10px;
+  border-radius: 999px;
+  background: var(--fg);
+  color: var(--surface);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  box-shadow: 0 12px 32px -12px rgb(0 0 0 / 0.5);
+}
+.toast-icon {
+  display: grid;
+  height: 22px;
+  width: 22px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 16%, transparent);
+}
+
+/* ---- the Studio's way back: first in its toolbar ---- */
+.bar-back {
+  display: flex;
+  height: 32px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 7px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-2);
+  white-space: nowrap;
+  transition:
+    color var(--dur-1) ease,
+    background-color var(--dur-1) ease;
+}
+.bar-back:hover {
+  color: var(--fg);
+  background: var(--surface-2);
+}
+.bar-back svg {
+  width: 16px;
+  height: 16px;
+  transition: transform var(--dur-2) var(--ease-out);
+}
+.bar-back:hover svg {
+  transform: translateX(-2px);
+}
+
+/* ---- a status dot that breathes (the AI ready) ---- */
+.pulse-dot {
+  position: relative;
+}
+.pulse-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: inherit;
+  animation: pulse-ring 2.4s var(--ease-out) infinite;
+}
+@keyframes pulse-ring {
+  from {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(2.8);
+  }
+}
+
+/* ---- empty and problem states: the glyph sits in a soft ring, like a stamp ---- */
+.state-glyph {
+  position: relative;
+  display: grid;
+  height: 56px;
+  width: 56px;
+  place-items: center;
+  border-radius: 18px;
+}
+.state-glyph::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 24px;
+  box-shadow: inset 0 0 0 1px var(--line);
+  opacity: 0.7;
+}
+@media (hover: hover) {
+  .state-float {
+    animation: state-float 4s ease-in-out infinite;
+  }
+}
+@keyframes state-float {
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+/* ---- everything above, still: under reduced motion nothing slides, springs, spins or floats; the words still
+   change (slower), the bars still fill (at once) ---- */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-1: 0ms;
+    --dur-2: 0ms;
+    --dur-3: 0ms;
+    --dur-4: 0ms;
+  }
+  .nav-item > svg,
+  .nav-new > svg,
+  .bar-back svg {
+    transition: none !important;
+    transform: none !important;
+  }
+  .pring-fill,
+  .render-bar > span {
+    transition: none !important;
+  }
+  .check-draw path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .pring-spin,
+  .render-card,
+  .quote-in,
+  .pulse-dot::after,
+  .state-float {
+    animation: none;
+  }
+  .gerund-in {
+    animation: none;
+    color: var(--fg);
+    background: none;
+  }
+  .nav-glide {
+    transition: none;
+  }
+}
+
+
+/* ======================================================================================================================
+   Round 32: the UI language. Choices are words, not buttons; regions are tones, not boxes.
+   - options (Segmented): plain words, the picked one in ink with a short underline that glides to it;
+   - choices (a grid of presets): the same words in a grid, the picked one underlined;
+   - navigation (sidebar, side lists): a soft fill behind the row you're on;
+   - panels: no borders between regions; ground → panel → stage are three tones;
+   - one ink button per view; the rest are quiet fills or bare words.
+   ====================================================================================================================== */
+.opts {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+}
+.opts-full {
+  display: flex;
+  width: 100%;
+}
+.opt {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-width: 0;
+  height: var(--control-h);
+  align-items: center;
+  justify-content: center;
+  padding: 0 7px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-3);
+  white-space: nowrap;
+  transition: color var(--dur-1) var(--ease-out);
+}
+.opts-full .opt {
+  flex: 1;
+}
+.opts-sm .opt {
+  height: var(--control-h-sm);
+  padding: 0 5px;
+  font-size: 12px;
+}
+.opts-lg .opt {
+  height: var(--control-h-lg);
+  padding: 0 10px;
+  font-size: 14px;
+}
+.opt:hover,
+.opt[aria-checked="true"] {
+  color: var(--text-1);
+}
+.opt-word {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+.opt-mark {
+  position: absolute;
+  left: 0;
+  bottom: 3px;
+  height: var(--option-mark-h);
+  border-radius: 2px;
+  background: var(--text-1);
+  transform-origin: 0 0;
+  will-change: transform;
+  pointer-events: none;
+}
+.opts-sm .opt-mark {
+  bottom: 2px;
+}
+
+/* a grid of presets (camera angles, moves, transitions) */
+.choices {
+  display: grid;
+  gap: 2px 4px;
+}
+.choice {
+  display: flex;
+  height: 30px;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-3);
+  text-decoration-line: underline;
+  text-decoration-color: transparent;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+  transition:
+    color var(--dur-1) ease,
+    background-color var(--dur-1) ease,
+    text-decoration-color var(--dur-1) ease;
+}
+.choice:hover {
+  color: var(--text-1);
+  background: var(--bg-hover);
+}
+.choice[aria-checked="true"] {
+  color: var(--text-1);
+  text-decoration-color: var(--text-1);
+}
+.choice-more {
+  color: var(--selection-text);
+  text-decoration: none;
+}
+
+/* the inspector and the side panels: a panel tone, sections spaced rather than ruled */
+.insp-section + .insp-section {
+  box-shadow: 0 -1px 0 var(--border-1);
+}
+
+/* a panel's rail: one glyph per panel down its edge (Layers, Kit…), the one that's open on a soft fill */
+.rail {
+  display: flex;
+  width: var(--rail-w);
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 0;
+  background: var(--bg-app);
+}
+.rail-item {
+  display: grid;
+  height: 38px;
+  width: 38px;
+  place-items: center;
+  border-radius: var(--radius-md);
+  color: var(--text-3);
+  transition:
+    color var(--dur-1) ease,
+    background-color var(--dur-1) ease;
+}
+.rail-item svg {
+  width: 19px;
+  height: 19px;
+  transition: transform var(--dur-3) var(--ease-spring);
+}
+.rail-item:hover {
+  color: var(--text-1);
+  background: var(--bg-hover);
+}
+.rail-item[aria-selected="true"] {
+  color: var(--text-1);
+  background: var(--bg-selected);
+}
+@media (hover: hover) and (pointer: fine) {
+  .rail-item:hover svg {
+    transform: scale(1.08);
+  }
+}
+/* a panel's big title, the way a tool names the drawer you're in */
+.panel-title {
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+/* the editor's bar: on the ground, full width, no rule under it */
+.editor-bar {
+  position: relative;
+  z-index: var(--z-panel);
+  display: grid;
+  height: var(--bar-h);
+  flex-shrink: 0;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  background: var(--bg-app);
+}
+
+/* (the marks above are placed by transform, so reduced motion only stops them gliding: useFlip skips the animation) */
+@media (prefers-reduced-motion: reduce) {
+  .opt,
+  .choice,
+  .rail-item {
+    transition: none !important;
+  }
+  .rail-item svg {
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
+
+/* ---- Home's ways to start: each drawn as what it makes ---- */
+.start-art {
+  aspect-ratio: auto;
+}
+.start-dashed {
+  background: transparent;
+}
+.start-dashed::after {
+  box-shadow: none;
+  border: 1.5px dashed var(--border-3);
+}
+.card:hover .start-dashed::after {
+  border-color: var(--text-3);
+}
+/* the Artist: the mark, big, in a field of the engine's own colours */
+.artist-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(60% 70% at 25% 80%, color-mix(in srgb, var(--brand-1) 70%, transparent), transparent 70%),
+    radial-gradient(55% 60% at 80% 20%, color-mix(in srgb, var(--brand-3) 60%, transparent), transparent 70%),
+    radial-gradient(70% 70% at 60% 60%, color-mix(in srgb, var(--brand-2) 70%, transparent), transparent 75%),
+    #120f1f;
+}
+.artist-mark {
+  width: 34%;
+  height: auto;
+  filter: drop-shadow(0 10px 24px rgb(0 0 0 / 0.35));
+}
+.artist-mark circle {
+  transform-box: view-box;
+  transition: transform var(--dur-4) var(--ease-spring);
+}
+@media (hover: hover) and (pointer: fine) {
+  .card:hover .artist-mark circle:nth-child(1) {
+    transform: translate(-2px, 1.6px);
+  }
+  .card:hover .artist-mark circle:nth-child(2) {
+    transform: translate(-1px, 0.8px);
+  }
+  .card:hover .artist-mark circle:nth-child(3) {
+    transform: translate(0.8px, -0.6px);
+  }
+}
+
+/* ---- the guide, as one line: numbered steps joined by a rule that turns green as they're done ---- */
+.step {
+  display: inline-flex;
+  height: 30px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 0 4px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-2);
+  transition:
+    color var(--dur-1) ease,
+    background-color var(--dur-1) ease;
+}
+.step:hover {
+  color: var(--text-1);
+  background: var(--bg-hover);
+}
+.step[data-next="true"] {
+  color: var(--text-1);
+}
+.step[data-done="true"] {
+  color: var(--text-3);
+}
+.step-dot {
+  display: grid;
+  height: 22px;
+  width: 22px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: var(--radius-full);
+  box-shadow: inset 0 0 0 1.5px var(--border-3);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.step[data-next="true"] .step-dot {
+  background: var(--bg-inverse);
+  color: var(--text-inverse);
+  box-shadow: none;
+}
+.step[data-done="true"] .step-dot {
+  background: var(--success);
+  color: #fff;
+  box-shadow: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .artist-mark circle,
+  .step {
+    transition: none;
+  }
+  .artist-mark circle {
+    transform: none !important;
   }
 }

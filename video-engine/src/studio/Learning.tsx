@@ -66,7 +66,7 @@ export function Learning({ api, state, gallery, refs, taste, onReload, onPreview
       .sort((a, b) => b[1] - a[1])
   return (
     <div className="scroll-thin min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
-      <section aria-label="What your decisions taught" className="rounded-xl p-3 shadow-[inset_0_0_0_1px_var(--line)]">
+      <section aria-label="What your decisions taught" className="rounded-xl bg-subtle p-3">
         <div className="flex items-start justify-between gap-3">
           <span className="min-w-0">
             <span className="flex items-center gap-1.5 text-body font-medium">
@@ -138,7 +138,7 @@ export function Learning({ api, state, gallery, refs, taste, onReload, onPreview
       </section>
 
       {taste?.reviews && (
-        <section aria-label="Your verdicts" className="rounded-xl p-3 shadow-[inset_0_0_0_1px_var(--line)]">
+        <section aria-label="Your verdicts" className="rounded-xl bg-subtle p-3">
           <span className="block text-body font-medium">Your verdicts on rendered films</span>
           <span className="mt-0.5 block text-caption text-fg-3">What you said when you kept a film, or sent it back: kept films weigh most, and what could be better becomes rules.</span>
           <div className="mt-3 grid gap-x-8 gap-y-3 md:grid-cols-2">
@@ -192,7 +192,7 @@ export function Learning({ api, state, gallery, refs, taste, onReload, onPreview
             Four new films each
           </Button>
         </div>
-        <ul className="divide-y rounded-xl shadow-[inset_0_0_0_1px_var(--line)]">
+        <ul className="divide-y">
           {health.map((g, i) => (
             <li key={g.shape} className="grid gap-x-4 gap-y-2 px-3 py-2.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,220px)_auto] sm:items-center">
               <span className="min-w-0">
@@ -224,7 +224,7 @@ export function Learning({ api, state, gallery, refs, taste, onReload, onPreview
       {reread.length > 0 && (
         <section aria-label="The gallery, re-read">
           <h3 className="pb-2 text-caption font-medium text-fg-3">The gallery, re-read by the critic · the weakest first</h3>
-          <ul className="divide-y rounded-xl shadow-[inset_0_0_0_1px_var(--line)]">
+          <ul className="divide-y">
             {reread.map(({ s, a }) => (
               <li key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5">
                 <span className="min-w-0 flex-1 basis-[220px]">

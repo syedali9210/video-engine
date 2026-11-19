@@ -25,7 +25,9 @@ import {
   MagnifyingGlass,
   PaintBucket,
   Plus,
+  Shapes,
   Square,
+  Stack,
   SquaresFour,
   TextT,
   Trash,
@@ -33,11 +35,13 @@ import {
 } from "@phosphor-icons/react"
 import { DEVICES, type DeviceId } from "../devices"
 import { ANIMS, byId } from "../registry"
-import { Button, Dialog, IconButton, MenuItem, Popover, Segmented, type Icon } from "../ui"
+import { Button, Dialog, IconButton, MenuItem, Popover, Segmented, Tip, type Icon } from "../ui"
 import { EFFECTS, SAMPLE_COPY, TEMPLATES, isAnimated, uid, type Comp, type Layer, type Scene, type Template } from "./comp"
 import { BACKDROPS } from "./config"
 import { fillCss, isDark } from "./look"
 import { BrandRow, CategoryChips, InBar, PanelFoot } from "../shell"
+import { Card } from "../Galleries"
+import { FilmPoster } from "../FilmPoster"
 import { CATEGORIES, categoryName } from "../refs"
 import type { Sel } from "./Stage"
 
@@ -146,8 +150,8 @@ export function LayersPanel({
   const bgName = BACKDROPS.find((b) => b.id === comp.fill)?.name ?? "Custom colour"
   const fx = EFFECTS.find((e) => e.id === comp.effect)
 
-  return (
-    <div className="flex h-full flex-col bg-surface">
+  const panel = (
+    <div className="flex h-full min-w-0 flex-1 flex-col bg-panel">
       {foot !== undefined && !bar && (
         <BrandRow>
           <Button size="sm" popover="layers-new">
@@ -168,11 +172,9 @@ export function LayersPanel({
           </Popover>
         </BrandRow>
       )}
-      <div className={`flex shrink-0 items-center gap-2 pl-4 pr-2 ${foot !== undefined ? "h-11 border-y" : "h-12 border-b"}`}>
+      <div className="flex h-14 shrink-0 items-center gap-2 pl-4 pr-2">
         {kit && !hideTitle ? (
-          <span className="mr-auto">
-            <Segmented size="sm" label="Panel" value={tab} onChange={setTab} options={[{ value: "layers", label: "Layers" }, { value: "kit", label: "Kit" }]} />
-          </span>
+          <h2 className="panel-title mr-auto">{tab === "kit" ? "Kit" : "Layers"}</h2>
         ) : (
           <h2 className={`mr-auto ${foot !== undefined ? "text-caption font-medium text-fg-2" : "text-body font-semibold"} ${hideTitle ? "sr-only" : ""}`}>Layers</h2>
         )}
@@ -462,6 +464,39 @@ export function LayersPanel({
       )}
     </div>
   )
+  if (!kit || hideTitle) return panel
+  // on a computer: a rail of the panel's drawers down its edge, the open one named big at its top
+  const drawers = [
+    { value: "layers" as const, label: "Layers", icon: Stack },
+    { value: "kit" as const, label: "Kit: titles, grounds and shots", icon: Shapes },
+  ]
+  return (
+    <div className="flex h-full min-w-0">
+      <nav aria-label="Panels" role="tablist" aria-orientation="vertical" className="rail">
+        {drawers.map((d) => (
+          <Tip key={d.value} label={d.label} side="right">
+            <button type="button" role="tab" aria-selected={tab === d.value} aria-label={d.label} onClick={() => setTab(d.value)} className="rail-item">
+              <d.icon aria-hidden />
+            </button>
+          </Tip>
+        ))}
+        <span className="my-1 h-px w-6 bg-line-strong" aria-hidden />
+        <Tip label="Start from a template" side="right">
+          <button type="button" aria-label="Start from a template" onClick={onTemplates} className="rail-item">
+            <FilmSlate aria-hidden />
+          </button>
+        </Tip>
+        {onArtist && (
+          <Tip label="Direct a film with the Artist" side="right">
+            <button type="button" aria-label="Direct a film with the Artist" onClick={onArtist} className="rail-item">
+              <PaintBrush aria-hidden />
+            </button>
+          </Tip>
+        )}
+      </nav>
+      {panel}
+    </div>
+  )
 }
 
 /* ---------------- the template gallery ---------------- */
@@ -488,7 +523,7 @@ function Storyboard({ t, accent }: { t: Template; accent?: string }) {
   )
 }
 
-export function TemplateDialog({ open, onClose, onPick, scripts = [], accent, onArtist }: { open: boolean; onClose: () => void; onPick: (t: Template) => void; scripts?: Template[]; accent?: string; /** the Artist directs a whole film instead */ onArtist?: () => void }) {
+export function TemplateDialog({ open, onClose, onPick, scripts = [], accent, product = "Your product", onArtist }: { open: boolean; onClose: () => void; onPick: (t: Template) => void; scripts?: Template[]; accent?: string; /** whose name the posters wear */ product?: string; /** the Artist directs a whole film instead */ onArtist?: () => void }) {
   // the kind of film wanted: every list narrows to it
   const [cat, setCat] = useState("all")
   const fits = (t: Template) => cat === "all" || t.category === cat
@@ -497,37 +532,32 @@ export function TemplateDialog({ open, onClose, onPick, scripts = [], accent, on
   const all = [...scripts, ...TEMPLATES]
   const chips = [
     { id: "all", name: "All", count: all.length },
-    ...CATEGORIES.film.map((c) => ({ id: c.id, name: c.name, count: all.filter((t) => t.category === c.id).length })),
+    // a kind with nothing in it isn't offered
+    ...CATEGORIES.film.map((c) => ({ id: c.id, name: c.name, count: all.filter((t) => t.category === c.id).length })).filter((c) => c.count > 0),
   ]
   const hint = CATEGORIES.film.find((c) => c.id === cat)?.hint
-  const card = (t: Template) => (
-    <li key={t.id}>
-      <button type="button" onClick={() => onPick(t)} className="press lift flex w-full flex-col gap-2 rounded-xl bg-surface-2 p-2 text-left shadow-[var(--in-hi),0_0_0_1px_var(--line)]">
-        <Storyboard t={t} accent={accent} />
-        <span className="px-0.5">
-          <span className="flex items-baseline justify-between gap-2">
-            <span className="text-body font-medium">{t.name}</span>
-            <span className="shrink-0 text-micro tabular-nums text-fg-3">
-              {cat === "all" && t.category ? `${categoryName("film", t.category)} · ` : ""}
-              {t.scenes === 1 ? "1 scene" : `${t.scenes} scenes`}
-            </span>
-          </span>
-          <span className="mt-0.5 block text-caption text-fg-3">{t.hint}</span>
-        </span>
-      </button>
-    </li>
+  // each film as its poster, the way the Films gallery shows it: the work big, its name and one line under it
+  const card = (t: Template, i = 0) => (
+    <Card
+      key={t.id}
+      i={i}
+      onClick={() => onPick(t)}
+      title={t.name}
+      meta={`${cat === "all" && t.category ? `${categoryName("film", t.category)} · ` : ""}${t.scenes === 1 ? "1 scene" : `${t.scenes} scenes`}`}
+      shot={<FilmPoster bare t={t} product={product} accent={accent} />}
+    />
   )
   return (
     <Dialog open={open} onClose={onClose} label="Templates" className="modal medium">
       <div className="flex max-h-[inherit] flex-col">
         <DialogHead icon={FilmSlate} tone="var(--k-scene)" title="Start from a template" sub="Made from what's open: its device, its screen, its words, your brand." onClose={onClose} />
-        <div className="border-b px-4 pb-2 pt-3">
+        <div className="px-5 pb-1 pt-1">
           <CategoryChips label="Kind of film" value={cat} onChange={setCat} options={chips} />
-          {hint && <p className="px-0.5 pt-1 text-caption text-fg-3">{hint}</p>}
+          {hint && <p className="pt-1 text-caption text-fg-3">{hint}</p>}
         </div>
-        <div className="scroll-thin min-h-0 overflow-y-auto p-3">
+        <div className="scroll-thin min-h-0 overflow-y-auto px-5 pb-5 pt-3">
           {onArtist && (
-            <button type="button" onClick={onArtist} className="press mb-3 flex w-full items-center gap-3 rounded-lg p-3 text-left shadow-[inset_0_0_0_1px_var(--line-strong)] hover:bg-surface-2">
+            <button type="button" onClick={onArtist} className="press -mx-2 mb-5 flex w-[calc(100%+16px)] items-center gap-3 rounded-xl p-2 text-left transition-colors duration-150 hover:bg-hover">
               <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-k-motion/15 text-k-motion">
                 <PaintBrush size={18} />
               </span>
@@ -543,29 +573,29 @@ export function TemplateDialog({ open, onClose, onPick, scripts = [], accent, on
                 const of = [...studied, ...built].filter((t) => t.category === k.id)
                 return of.length ? (
                   <section key={k.id} aria-label={k.name}>
-                    <h3 className="px-1 pb-2 text-caption font-medium text-fg-3">
-                      {k.name} · <span className="font-normal">{k.hint}</span>
+                    <h3 className="pb-3 text-body font-medium text-fg-2">
+                      {k.name} <span className="font-normal text-fg-3">· {k.hint}</span>
                     </h3>
-                    <ul className="grid grid-cols-1 gap-2.5 pb-4 sm:grid-cols-2 md:grid-cols-3">{of.map(card)}</ul>
+                    <ul className="grid grid-cols-2 gap-x-4 gap-y-6 pb-8 md:grid-cols-3">{of.map((t, i) => card(t, i))}</ul>
                   </section>
                 ) : null
               })
             : studied.length > 0 && (
                 <>
-                  <h3 className="px-1 pb-2 text-caption font-medium text-fg-3">Scripts · rebuilt from reference films, improved by the template lab</h3>
-                  <ul className="grid grid-cols-1 gap-2.5 pb-4 sm:grid-cols-2 md:grid-cols-3">{studied.map(card)}</ul>
+                  <h3 className="pb-3 text-body font-medium text-fg-2">Scripts <span className="font-normal text-fg-3">· rebuilt from reference films, improved by the template lab</span></h3>
+                  <ul className="grid grid-cols-2 gap-x-4 gap-y-6 pb-8 md:grid-cols-3">{studied.map((t, i) => card(t, i))}</ul>
                 </>
               )}
           {cat === "all" && [...studied, ...built].some((t) => !t.category) && (
             <>
-              <h3 className="px-1 pb-2 text-caption font-medium text-fg-3">Other</h3>
-              <ul className="grid grid-cols-1 gap-2.5 pb-4 sm:grid-cols-2 md:grid-cols-3">{[...studied, ...built].filter((t) => !t.category).map(card)}</ul>
+              <h3 className="pb-3 text-body font-medium text-fg-2">Other</h3>
+              <ul className="grid grid-cols-2 gap-x-4 gap-y-6 pb-8 md:grid-cols-3">{[...studied, ...built].filter((t) => !t.category).map((t, i) => card(t, i))}</ul>
             </>
           )}
           {cat !== "all" && built.length > 0 && (
             <>
-              <h3 className="px-1 pb-2 text-caption font-medium text-fg-3">Built in</h3>
-              <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3">{built.map(card)}</ul>
+              <h3 className="pb-3 text-body font-medium text-fg-2">Built in</h3>
+              <ul className="grid grid-cols-2 gap-x-4 gap-y-6 md:grid-cols-3">{built.map((t, i) => card(t, i))}</ul>
             </>
           )}
         </div>

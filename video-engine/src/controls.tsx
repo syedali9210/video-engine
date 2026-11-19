@@ -528,7 +528,7 @@ export function EaseEditor({ id, value, set, size = 168 }: { id: string; value: 
   return (
     <div className="space-y-2">
       <div className="flex gap-3">
-        <svg ref={box} viewBox={`0 0 ${size} ${size}`} width={size} height={size} className="shrink-0 touch-none rounded-lg bg-surface-2 shadow-[inset_0_0_0_1px_var(--line)]" aria-label="Easing curve">
+        <svg ref={box} viewBox={`0 0 ${size} ${size}`} width={size} height={size} className="shrink-0 touch-none rounded-lg bg-surface-2" aria-label="Easing curve">
           <rect x={pad} y={pad} width={S} height={S} fill="none" stroke="var(--line-strong)" strokeDasharray="3 3" />
           <line x1={px(0)} y1={py(0)} x2={px(x1)} y2={py(y1)} stroke="var(--fg-3)" strokeWidth={1.5} />
           <line x1={px(1)} y1={py(1)} x2={px(x2)} y2={py(y2)} stroke="var(--fg-3)" strokeWidth={1.5} />

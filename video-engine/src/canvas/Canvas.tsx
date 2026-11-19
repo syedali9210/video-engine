@@ -40,7 +40,7 @@ import {
 } from "@phosphor-icons/react"
 import { field } from "../controls"
 import { ANIMS, byId, htmlUrl, withDefaults, type Values } from "../registry"
-import { Button, IconButton, MenuItem, Popover, Segmented, closePopover, useMedia, type Icon } from "../ui"
+import { Button, IconButton, MenuItem, Popover, Segmented, Tip, closePopover, useMedia, type Icon } from "../ui"
 import { AnimPicker, kStyle, tone } from "../studio/Layers"
 import { pack } from "../studio/web"
 import { CanvasInspector, backgroundEffect } from "./CanvasInspector"
@@ -50,7 +50,7 @@ import { loadRuntime, paletteOf, pictureOf, type Mounted } from "./runtime"
 import { TurnBall, TurnReadout, type Axis } from "./TurnBall"
 import { applyLook } from "./looks"
 import { CreateDialog } from "./CreateDialog"
-import { BrandRow, DockBack, KindTile, PanelFoot } from "../shell"
+import { BarBack, BrandRow, KindTile, PanelFoot } from "../shell"
 import { blob, glass, glow, gradient, ring, type CreateCtx } from "./create"
 import { accentsOf, type Look } from "../theme"
 import {
@@ -934,144 +934,14 @@ export function CanvasWorkspace({ dark, anim, overrides, switcher, compact, say,
     )
 
   return (
-    <div className="flex h-full min-h-0 flex-1">
-      {/* ---- left: the layers, and the assets to drag in (folded away on a narrow window, the top pill brings it) ---- */}
-      {leftShown && (
-      <aside className="flex w-[248px] shrink-0 flex-col overflow-hidden border-r bg-surface">
-        <BrandRow />
-        <div className="flex h-11 shrink-0 items-center border-y px-3">
-          <Segmented<"layers" | "assets">
-            full
-            size="sm"
-            label="Panel"
-            value={side}
-            onChange={setSide}
-            options={[
-              { value: "layers", label: "Layers", icon: Stack },
-              { value: "assets", label: "Assets", icon: SquaresFour },
-            ]}
-          />
-        </div>
-        {side === "layers" ? (
-          <>
-            <ul role="listbox" aria-label="Layers" aria-multiselectable className="scroll-thin min-h-0 flex-1 space-y-px overflow-y-auto p-2">
-              {!layerRows.length && <li className="px-2 py-3 text-caption text-fg-3">Empty. Draw with the tools below, drag a device or a component in from Assets, or make a whole composition with Create.</li>}
-              {layerRows.map((n) => {
-                const I = KIND_ICON[n.kind]
-                const on = sel.includes(n.id)
-                const hidden = boxOf(n, view).hidden
-                return (
-                  <li key={n.id} role="option" aria-selected={on} className={`group flex h-8 items-center gap-2 rounded-md pl-2 pr-1 ${on ? "bg-sel/15" : hoverId === n.id ? "bg-surface-2" : "hover:bg-surface-2"}`}>
-                    <button type="button" onClick={(e) => setSel(e.shiftKey ? (on ? sel.filter((x) => x !== n.id) : [...sel, n.id]) : [n.id])} onMouseEnter={() => setHoverId(n.id)} onMouseLeave={() => setHoverId(null)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                      <I size={15} aria-hidden className={hidden ? "shrink-0 text-fg-3" : "k-ink shrink-0"} style={kStyle(KIND_TONE[n.kind])} />
-                      <span className={`truncate text-body ${hidden ? "text-fg-3 line-through" : on ? "font-medium text-fg" : "text-fg-2"}`}>{nodeName(n)}</span>
-                    </button>
-                    <span className={on || hidden ? "" : "opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"}>
-                      <IconButton
-                        size="sm"
-                        label={hidden ? `Show ${nodeName(n)}` : `Hide ${nodeName(n)}${view === "phone" ? " on phones" : ""}`}
-                        onClick={() => nodes((ls) => ls.map((x) => (x.id !== n.id ? x : view === "phone" ? { ...x, phone: { ...x.phone, hidden: !boxOf(x, "phone").hidden } } : { ...x, hidden: !x.hidden })))}
-                      >
-                        {hidden ? <EyeSlash size={14} /> : <Eye size={14} />}
-                      </IconButton>
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
-            <button type="button" onClick={() => setSel([])} aria-pressed={!sel.length} className={`press flex h-12 shrink-0 items-center gap-2.5 border-t px-4 text-left ${!sel.length ? "bg-sel/15" : "hover:bg-surface-2"}`}>
-              <span aria-hidden className="h-5 w-5 shrink-0 rounded shadow-[inset_0_0_0_1px_rgb(0_0_0/0.14)]" style={{ background: bake(doc).frame.fill }} />
-              <span className="min-w-0 flex-1">
-                <span className="block text-body font-medium">Frame</span>
-                <span className="block truncate text-micro text-fg-3">
-                  {view === "phone" ? "Phone" : "Desktop"} · {f.w} × {Math.round(f.h)}
-                </span>
-              </span>
-            </button>
-          </>
-        ) : (
-          <div className="scroll-thin min-h-0 flex-1 overflow-y-auto p-3">
-            <p className="pb-2 text-caption font-medium text-fg-3">Devices · drag one onto the frame</p>
-            <div className="grid grid-cols-2 gap-2">
-              {DEVICE_LIST.map((d) => (
-                <button
-                  key={d.id}
-                  type="button"
-                  draggable
-                  onDragStart={(e) => e.dataTransfer.setData("application/x-canvas", JSON.stringify({ kind: "device", id: d.id }))}
-                  onClick={() => addAt({ kind: "device", id: d.id }, { x: f.w / 2, y: f.h / 2 })}
-                  className="press flex h-16 cursor-grab flex-col items-center justify-center gap-1 rounded-lg text-caption text-fg-2 shadow-[inset_0_0_0_1px_var(--line)] hover:bg-surface-2 active:cursor-grabbing"
-                >
-                  <d.icon size={20} aria-hidden className="text-k-device" />
-                  {d.name}
-                </button>
-              ))}
-            </div>
-            <p className="pb-2 pt-4 text-caption font-medium text-fg-3">Graphics · made in the canvas's look</p>
-            <div className="grid grid-cols-3 gap-1.5">
-              {(
-                [
-                  ["Light", () => glow(0, 0, 220, lastLook.current?.glow ?? "#8fb8ff")],
-                  ["Blob", () => blob(0, 0, 180, lastLook.current?.haze ?? "#c7b8ff", Date.now() % 997)],
-                  ["Ring", () => ring(0, 0, 200, lastLook.current?.muted ?? "#71717a", 2)],
-                  ["Glass card", () => glass(0, 0, 380, 260, "#ffffff")],
-                  ["Aurora", () => gradient("aurora", { x: 0, y: 0, w: 640, h: 400 }, lastLook.current ?? undefined)],
-                  ["Mesh", () => gradient("mesh", { x: 0, y: 0, w: 640, h: 400 }, lastLook.current ?? undefined)],
-                ] as const
-              ).map(([label, make]) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => {
-                    const n = make()
-                    const c = roomFor(n.w, n.h)
-                    add({ ...n, x: Math.round(c.x - n.w / 2), y: Math.round(c.y - n.h / 2) } as CNode)
-                  }}
-                  className="press h-9 rounded-md text-caption font-medium text-fg-2 shadow-[inset_0_0_0_1px_var(--line)] hover:bg-surface-2 hover:text-fg"
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <p className="pt-1.5 text-micro text-fg-3">Coloured by the look you put on last. For whole layouts, Create.</p>
-            <p className="pb-2 pt-4 text-caption font-medium text-fg-3">Effects · animated artwork</p>
-            <EffectGallery drag onPick={addBackground} />
-            <p className="pt-1.5 text-micro text-fg-3">A click sets the frame's background; drag one to place it.</p>
-            <p className="pb-2 pt-4 text-caption font-medium text-fg-3">Components · live, from the library</p>
-            <label className={`${field} mb-2 flex h-8 items-center gap-2 px-2.5`}>
-              <MagnifyingGlass size={14} aria-hidden className="text-fg-3" />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" aria-label="Search components" className="min-w-0 flex-1 bg-transparent text-body outline-none placeholder:text-fg-3" />
-            </label>
-            <ul className="grid grid-cols-2 gap-2">
-              {components.map((a) => (
-                <li key={a.id}>
-                  <button
-                    type="button"
-                    draggable
-                    onDragStart={(e) => e.dataTransfer.setData("application/x-canvas", JSON.stringify({ kind: "component", id: a.id }))}
-                    onClick={() => addAt({ kind: "component", id: a.id }, { x: f.w / 2, y: f.h / 2 }, true)}
-                    title={a.name}
-                    className="press block w-full cursor-grab text-left active:cursor-grabbing"
-                  >
-                    <span className="block aspect-[4/3] overflow-hidden rounded-md bg-canvas shadow-[0_0_0_1px_var(--line)]">
-                      <img src={`/thumbs/${a.id}-${dark ? "dark" : "light"}.webp`} alt="" loading="lazy" draggable={false} className="h-full w-full object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
-                    </span>
-                    <span className="mt-1 block truncate text-caption text-fg-2">{a.name}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        <PanelFoot info={`${doc.layers.length} ${doc.layers.length === 1 ? "layer" : "layers"}`}>{foot}</PanelFoot>
-      </aside>
-      )}
-
-      {/* ---- middle: the canvas ---- */}
-      <main aria-label="Canvas" className="@container relative flex min-w-0 flex-1 flex-col">
-        <div className="@container relative z-30 grid h-11 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b bg-surface px-2 @max-[44rem]:grid-cols-[minmax(0,1fr)_auto_auto]">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-app">
+      {/* the editor's bar, full width on the ground */}
+        <header className="editor-bar @container @max-[44rem]:grid-cols-[minmax(0,1fr)_auto_auto]">
           <div className="flex h-10 min-w-0 items-center gap-2 justify-self-start">
-            <IconButton label={leftShown ? "Hide the sidebar" : "Show the sidebar"} expanded={leftShown} onClick={() => (setFocus(false), setLeft(!leftShown))}>
+            <span className="flex items-center">
+              <BarBack />
+            </span>
+            <IconButton label={leftShown ? "Hide the panel" : "Show the panel"} expanded={leftShown} onClick={() => (setFocus(false), setLeft(!leftShown))}>
               <SidebarSimple size={17} />
             </IconButton>
             <span className="truncate text-body font-medium">{doc.name}</span>
@@ -1143,7 +1013,148 @@ export function CanvasWorkspace({ dark, anim, overrides, switcher, compact, say,
               />
             </Popover>
           </div>
+        </header>
+      <div className="flex min-h-0 flex-1">
+      {/* ---- left: the layers, and the assets to drag in, as drawers on a rail (folded away on a narrow window) ---- */}
+      {leftShown && (
+      <aside className="flex w-[300px] shrink-0 overflow-hidden">
+        <nav aria-label="Panels" role="tablist" aria-orientation="vertical" className="rail">
+          {(
+            [
+              { value: "layers", label: "Layers", icon: Stack },
+              { value: "assets", label: "Assets: devices, components, graphics", icon: SquaresFour },
+            ] as const
+          ).map((d) => (
+            <Tip key={d.value} label={d.label} side="right">
+              <button type="button" role="tab" aria-selected={side === d.value} aria-label={d.label} onClick={() => setSide(d.value)} className="rail-item">
+                <d.icon aria-hidden />
+              </button>
+            </Tip>
+          ))}
+        </nav>
+        <div className="flex min-w-0 flex-1 flex-col bg-panel">
+        <BrandRow />
+        <div className="flex h-14 shrink-0 items-center px-4">
+          <h2 className="panel-title">{side === "layers" ? "Layers" : "Assets"}</h2>
         </div>
+        {side === "layers" ? (
+          <>
+            <ul role="listbox" aria-label="Layers" aria-multiselectable className="scroll-thin min-h-0 flex-1 space-y-px overflow-y-auto p-2">
+              {!layerRows.length && <li className="px-2 py-3 text-caption text-fg-3">Empty. Draw with the tools below, drag a device or a component in from Assets, or make a whole composition with Create.</li>}
+              {layerRows.map((n) => {
+                const I = KIND_ICON[n.kind]
+                const on = sel.includes(n.id)
+                const hidden = boxOf(n, view).hidden
+                return (
+                  <li key={n.id} role="option" aria-selected={on} className={`group flex h-8 items-center gap-2 rounded-md pl-2 pr-1 ${on ? "bg-sel/15" : hoverId === n.id ? "bg-surface-2" : "hover:bg-surface-2"}`}>
+                    <button type="button" onClick={(e) => setSel(e.shiftKey ? (on ? sel.filter((x) => x !== n.id) : [...sel, n.id]) : [n.id])} onMouseEnter={() => setHoverId(n.id)} onMouseLeave={() => setHoverId(null)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                      <I size={15} aria-hidden className={hidden ? "shrink-0 text-fg-3" : "k-ink shrink-0"} style={kStyle(KIND_TONE[n.kind])} />
+                      <span className={`truncate text-body ${hidden ? "text-fg-3 line-through" : on ? "font-medium text-fg" : "text-fg-2"}`}>{nodeName(n)}</span>
+                    </button>
+                    <span className={on || hidden ? "" : "opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"}>
+                      <IconButton
+                        size="sm"
+                        label={hidden ? `Show ${nodeName(n)}` : `Hide ${nodeName(n)}${view === "phone" ? " on phones" : ""}`}
+                        onClick={() => nodes((ls) => ls.map((x) => (x.id !== n.id ? x : view === "phone" ? { ...x, phone: { ...x.phone, hidden: !boxOf(x, "phone").hidden } } : { ...x, hidden: !x.hidden })))}
+                      >
+                        {hidden ? <EyeSlash size={14} /> : <Eye size={14} />}
+                      </IconButton>
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+            <button type="button" onClick={() => setSel([])} aria-pressed={!sel.length} className={`press flex h-12 shrink-0 items-center gap-2.5 border-t px-4 text-left ${!sel.length ? "bg-sel/15" : "hover:bg-surface-2"}`}>
+              <span aria-hidden className="h-5 w-5 shrink-0 rounded shadow-[inset_0_0_0_1px_rgb(0_0_0/0.14)]" style={{ background: bake(doc).frame.fill }} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-body font-medium">Frame</span>
+                <span className="block truncate text-micro text-fg-3">
+                  {view === "phone" ? "Phone" : "Desktop"} · {f.w} × {Math.round(f.h)}
+                </span>
+              </span>
+            </button>
+          </>
+        ) : (
+          <div className="scroll-thin min-h-0 flex-1 overflow-y-auto p-3">
+            <p className="pb-2 text-caption font-medium text-fg-3">Devices · drag one onto the frame</p>
+            <div className="grid grid-cols-2 gap-2">
+              {DEVICE_LIST.map((d) => (
+                <button
+                  key={d.id}
+                  type="button"
+                  draggable
+                  onDragStart={(e) => e.dataTransfer.setData("application/x-canvas", JSON.stringify({ kind: "device", id: d.id }))}
+                  onClick={() => addAt({ kind: "device", id: d.id }, { x: f.w / 2, y: f.h / 2 })}
+                  className="press flex h-16 cursor-grab flex-col items-center justify-center gap-1 rounded-lg text-caption text-fg-2 hover:bg-surface-2 active:cursor-grabbing"
+                >
+                  <d.icon size={20} aria-hidden className="text-k-device" />
+                  {d.name}
+                </button>
+              ))}
+            </div>
+            <p className="pb-2 pt-4 text-caption font-medium text-fg-3">Graphics · made in the canvas's look</p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(
+                [
+                  ["Light", () => glow(0, 0, 220, lastLook.current?.glow ?? "#8fb8ff")],
+                  ["Blob", () => blob(0, 0, 180, lastLook.current?.haze ?? "#c7b8ff", Date.now() % 997)],
+                  ["Ring", () => ring(0, 0, 200, lastLook.current?.muted ?? "#71717a", 2)],
+                  ["Glass card", () => glass(0, 0, 380, 260, "#ffffff")],
+                  ["Aurora", () => gradient("aurora", { x: 0, y: 0, w: 640, h: 400 }, lastLook.current ?? undefined)],
+                  ["Mesh", () => gradient("mesh", { x: 0, y: 0, w: 640, h: 400 }, lastLook.current ?? undefined)],
+                ] as const
+              ).map(([label, make]) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => {
+                    const n = make()
+                    const c = roomFor(n.w, n.h)
+                    add({ ...n, x: Math.round(c.x - n.w / 2), y: Math.round(c.y - n.h / 2) } as CNode)
+                  }}
+                  className="press h-9 rounded-md text-caption font-medium text-fg-2 hover:bg-surface-2 hover:text-fg"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="pt-1.5 text-micro text-fg-3">Coloured by the look you put on last. For whole layouts, Create.</p>
+            <p className="pb-2 pt-4 text-caption font-medium text-fg-3">Effects · animated artwork</p>
+            <EffectGallery drag onPick={addBackground} />
+            <p className="pt-1.5 text-micro text-fg-3">A click sets the frame's background; drag one to place it.</p>
+            <p className="pb-2 pt-4 text-caption font-medium text-fg-3">Components · live, from the library</p>
+            <label className={`${field} mb-2 flex h-8 items-center gap-2 px-2.5`}>
+              <MagnifyingGlass size={14} aria-hidden className="text-fg-3" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" aria-label="Search components" className="min-w-0 flex-1 bg-transparent text-body outline-none placeholder:text-fg-3" />
+            </label>
+            <ul className="grid grid-cols-2 gap-2">
+              {components.map((a) => (
+                <li key={a.id}>
+                  <button
+                    type="button"
+                    draggable
+                    onDragStart={(e) => e.dataTransfer.setData("application/x-canvas", JSON.stringify({ kind: "component", id: a.id }))}
+                    onClick={() => addAt({ kind: "component", id: a.id }, { x: f.w / 2, y: f.h / 2 }, true)}
+                    title={a.name}
+                    className="press block w-full cursor-grab text-left active:cursor-grabbing"
+                  >
+                    <span className="block aspect-[4/3] overflow-hidden rounded-md bg-canvas shadow-[0_0_0_1px_var(--line)]">
+                      <img src={`/thumbs/${a.id}-${dark ? "dark" : "light"}.webp`} alt="" loading="lazy" draggable={false} className="h-full w-full object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
+                    </span>
+                    <span className="mt-1 block truncate text-caption text-fg-2">{a.name}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <PanelFoot info={`${doc.layers.length} ${doc.layers.length === 1 ? "layer" : "layers"}`}>{foot}</PanelFoot>
+        </div>
+      </aside>
+      )}
+
+      {/* ---- middle: the canvas ---- */}
+      <main aria-label="Canvas" className="@container relative flex min-w-0 flex-1 flex-col">
 
         <div
           ref={vpEl}
@@ -1324,7 +1335,6 @@ export function CanvasWorkspace({ dark, anim, overrides, switcher, compact, say,
               {!play && (
                 <div role="toolbar" aria-label="Tools" className="absolute inset-x-0 bottom-3 z-10 flex justify-center px-3">
                   <div className="dock">
-                    <DockBack />
                     {(
                       [
                         ["move", "Move", Cursor, "V", ""],
@@ -1440,8 +1450,8 @@ export function CanvasWorkspace({ dark, anim, overrides, switcher, compact, say,
 
       {/* ---- right: the picked layer, or the frame ---- */}
       {!focus && (
-      <aside aria-label="Inspector" className="flex w-[272px] shrink-0 flex-col overflow-hidden border-l bg-surface xl:w-[288px]">
-        <div className="flex h-12 shrink-0 items-center gap-2 border-b pl-4 pr-2.5">
+      <aside aria-label="Inspector" className="flex w-[272px] shrink-0 flex-col overflow-hidden bg-panel xl:w-[var(--inspector-w)]">
+        <div className="flex h-14 shrink-0 items-center gap-2 pl-4 pr-2.5">
           {single && (() => {
             const I = KIND_ICON[single.kind]
             return (
@@ -1488,6 +1498,7 @@ export function CanvasWorkspace({ dark, anim, overrides, switcher, compact, say,
         </div>
       </aside>
       )}
+      </div>
 
       <CreateDialog
         open={creating}

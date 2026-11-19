@@ -1,5 +1,6 @@
 // Studio — the inspector: whatever is picked in the layers (a scene, a device, a component, a picture, a title, or the
 // background) with its settings, plus the Export popover. All plain React, no three.js: the 3D stage is in Stage.tsx.
+import { Making } from "../Thinking"
 import { Problem } from "../States"
 import { LIBRARY, retimed } from "./library"
 import { analyseSong } from "./music"
@@ -76,7 +77,8 @@ const DEVICE_TILES: { id: DeviceId; label: string; icon: Icon }[] = [
   { id: "macbook", label: "MacBook", icon: Laptop },
 ]
 // a choice among several: a soft chip in a recessed well, the picked one lit and raised (the pills' and switches' look)
-const ring = (on: boolean) => (on ? "bg-surface text-fg shadow-[0_0_0_1px_var(--line-strong),0_1px_3px_rgb(0_0_0/0.18)] dark:bg-surface-3" : "text-fg-3 hover:bg-surface/60 hover:text-fg dark:hover:bg-surface-3/60")
+// a tile that can be picked (a device in its place, a device kind): the picked one on a soft fill, the rest bare words
+const ring = (on: boolean) => (on ? "bg-selected text-fg" : "text-fg-3 hover:bg-hover hover:text-fg")
 const swatch = (on: boolean) => (on ? "outline-[1.5px] outline-offset-2 outline-fg outline" : "hover:scale-[1.06]")
 const POSTURES: { value: Posture; label: string }[] = [
   { value: "folded", label: "Folded" },
@@ -120,17 +122,17 @@ export function Section({ title, aside, children, fold = false }: { title: strin
     }
   }
   return (
-    <section aria-label={title} className="break-inside-avoid border-b border-line px-4 last:border-b-0 [.cols_&]:border-b-0">
+    <section aria-label={title} className="insp-section break-inside-avoid px-4 [.cols_&]:shadow-none">
       <div className="flex min-h-11 items-center justify-between gap-2">
         <h3 className="min-w-0 flex-1">
-          <button type="button" aria-expanded={open} onClick={toggle} className="press group -ml-1 flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-body font-semibold text-fg">
-            <CaretRight size={11} weight="bold" aria-hidden className={`shrink-0 text-fg-3 transition-transform duration-150 ease-out group-hover:text-fg ${open ? "rotate-90" : ""}`} />
+          <button type="button" aria-expanded={open} onClick={toggle} className="press group -ml-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left text-[12.5px] font-semibold text-fg-2 transition-colors duration-150 hover:text-fg">
             <span className="truncate">{title}</span>
+            <CaretRight size={10} weight="bold" aria-hidden className={`shrink-0 text-fg-3 opacity-0 transition-[transform,opacity] duration-150 ease-out group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none ${open ? "rotate-90" : "opacity-100"}`} />
           </button>
         </h3>
         {aside && <span className="flex shrink-0 items-center text-caption text-fg-3">{aside}</span>}
       </div>
-      {open && <div className="rise-in space-y-1.5 pb-4">{children}</div>}
+      {open && <div className="rise-in space-y-1.5 pb-5">{children}</div>}
     </section>
   )
 }
@@ -169,7 +171,7 @@ export function Choices<T extends string>({ label, value, options, set, cols = 4
           "radio",
         )
       }
-      className="grid gap-1 rounded-xl bg-surface-2 p-1 shadow-[inset_0_0_0_1px_var(--line)]"
+      className="choices"
       style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
     >
       {list.map((o) => (
@@ -181,13 +183,13 @@ export function Choices<T extends string>({ label, value, options, set, cols = 4
           tabIndex={o.id === value ? 0 : -1}
           title={o.hint}
           onClick={() => set(o.id)}
-          className={`press h-8 truncate rounded-lg px-1.5 text-body font-medium transition-[color,background-color,box-shadow] duration-150 pointer-coarse:h-10 ${ring(o.id === value)}`}
+          className="press choice pointer-coarse:h-10"
         >
-          {o.name}
+          <span className="truncate">{o.name}</span>
         </button>
       ))}
       {show && options.length > show + 1 && (
-        <button type="button" aria-expanded={all} onClick={() => setAll(!all)} className="press h-8 truncate rounded-lg px-1.5 text-body font-medium text-sel-ink hover:bg-surface/60 pointer-coarse:h-10 dark:hover:bg-surface-3/60">
+        <button type="button" aria-expanded={all} onClick={() => setAll(!all)} className="press choice choice-more pointer-coarse:h-10">
           {all ? "Fewer" : `${options.length - list.length} more`}
         </button>
       )}
@@ -516,7 +518,7 @@ function ScenePanel(x: InspectorCtx & { scene: Scene }) {
       </Section>
 
       <Section title="Devices" aside="matched in scale">
-        <div className="grid grid-cols-3 gap-1 rounded-xl bg-surface-2 p-1 shadow-[inset_0_0_0_1px_var(--line)]">
+        <div className="grid grid-cols-3 gap-1">
           {SLOTS.map(({ value: slot, label }) => {
             const l = scene.layers.find((y): y is DeviceLayer => y.kind === "device" && y.slot === slot)
             const T = l ? DEVICE_TILES.find((t) => t.id === l.device)! : null
@@ -533,7 +535,7 @@ function ScenePanel(x: InspectorCtx & { scene: Scene }) {
                 <button
                   type="button"
                   popoverTarget={id}
-                  className={`press flex h-[68px] w-full flex-col items-center justify-center gap-1 rounded-lg text-caption transition-[color,background-color,box-shadow] duration-150 ${l ? ring(slot === "center") : "text-fg-3 hover:bg-surface/60 hover:text-fg dark:hover:bg-surface-3/60"}`}
+                  className={`press flex h-[68px] w-full flex-col items-center justify-center gap-1 rounded-lg text-caption transition-[color,background-color] duration-150 ${l ? ring(slot === "center") : "border border-dashed border-[var(--border-3)] text-fg-3 hover:bg-hover hover:text-fg"}`}
                 >
                   {T ? <T.icon size={20} aria-hidden /> : <Plus size={16} aria-hidden />}
                   <span className="font-medium">{T ? T.label : label}</span>
@@ -647,7 +649,7 @@ function ScenePanel(x: InspectorCtx & { scene: Scene }) {
               ["Turn and tilt", { yaw: 40, pitch: -20 }],
             ] as const
           ).map(([label, by]) => (
-            <button key={label} type="button" onClick={() => rotate(by)} className="press h-7 truncate rounded-md px-1 text-caption font-medium text-fg-2 shadow-[inset_0_0_0_1px_var(--line)] hover:bg-surface-2 hover:text-fg">
+            <button key={label} type="button" onClick={() => rotate(by)} className="press h-7 truncate rounded-md bg-subtle px-1 text-caption font-medium text-fg-2 hover:bg-hover hover:text-fg">
               {label}
             </button>
           ))}
@@ -826,7 +828,7 @@ function DevicePanel(x: InspectorCtx & { scene: Scene; l: DeviceLayer }) {
               "radio",
             )
           }
-          className="grid grid-cols-4 gap-1 rounded-xl bg-surface-2 p-1 shadow-[inset_0_0_0_1px_var(--line)]"
+          className="grid grid-cols-4 gap-1"
         >
           {DEVICE_TILES.map(({ id, label, icon: I }) => (
             <button
@@ -1920,16 +1922,10 @@ function ExportStatus({ state }: { state: ExportState }) {
         ))}
       </div>
     )
-  const pct = state.total ? state.done / state.total : 0
+  const pct = state.total > 1 ? state.done / state.total : undefined
   return (
-    <div role="status" className="mt-2.5">
-      <div className="flex justify-between text-caption text-fg-2">
-        <span>{state.label}</span>
-        {state.total > 1 && <span className="tabular-nums">{Math.round(pct * 100)}%</span>}
-      </div>
-      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface-3">
-        <div className="h-full rounded-full bg-fg transition-[width] duration-300 ease-out" style={{ width: `${Math.max(4, pct * 100)}%` }} />
-      </div>
+    <div className="mt-3 rounded-xl bg-subtle p-3">
+      <Making size="sm" progress={pct} quotes={false} detail={state.total > 1 ? `${Math.round((pct ?? 0) * 100)}% · frame ${state.done} of ${state.total}` : state.label} />
     </div>
   )
 }

@@ -453,7 +453,7 @@ function FileCard({ f, onChange, onRemove }: { f: KitFile; onChange: (p: Partial
   }
   return (
     <li className="group min-w-0">
-      <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-surface-2 shadow-[inset_0_0_0_1px_var(--line)]">
+      <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-surface-2">
         {picture || clip ? (
           <button ref={frame} type="button" onClick={aim} aria-label={`Set where to look in “${f.name}”`} className="absolute inset-0 block cursor-crosshair">
             {picture ? <img src={f.url} alt="" className="block h-full w-full object-contain" /> : <video src={`${f.url}#t=${(f.trim?.from ?? (f.dur ?? 2) / 2).toFixed(2)}`} muted playsInline preload="metadata" className="block h-full w-full object-contain" />}

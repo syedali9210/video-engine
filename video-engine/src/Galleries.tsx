@@ -46,7 +46,7 @@ export const Tag = ({ children }: { children: ReactNode }) => <span className="r
 /** Primary and secondary page actions: pill buttons, ink and quiet. */
 export function Act({ ink, icon: I, children, onClick }: { ink?: boolean; icon?: typeof Plus; children: ReactNode; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className={`press btn flex h-10 items-center gap-2 rounded-full px-4 text-ui font-medium ${ink ? "btn-ink" : "btn-2"}`}>
+    <button type="button" onClick={onClick} className={`press btn flex h-9 items-center gap-2 rounded-lg px-3.5 text-body font-medium ${ink ? "btn-ink" : "btn-2"}`}>
       {I && <I size={16} aria-hidden />}
       {children}
     </button>
@@ -56,7 +56,7 @@ export function Act({ ink, icon: I, children, onClick }: { ink?: boolean; icon?:
 /** "For Coins & Notes": whose films and creatives these are, with its still; a click switches. */
 function ForProduct({ product, anim, dark, onSwitch }: { product: string; anim: string; dark: boolean; onSwitch: () => void }) {
   return (
-    <button type="button" onClick={onSwitch} className="press group inline-flex items-center gap-2 rounded-full bg-surface-2 py-1 pl-1 pr-3 text-body text-fg-2 shadow-[inset_0_0_0_1px_var(--line)] transition-colors duration-150 hover:text-fg">
+    <button type="button" onClick={onSwitch} className="press group -ml-1 inline-flex items-center gap-2 rounded-full py-1 pl-1 pr-2.5 text-body text-fg-2 transition-colors duration-150 hover:bg-hover hover:text-fg">
       <img src={`/thumbs/${anim}-${dark ? "dark" : "light"}.webp`} alt="" className="h-6 w-6 rounded-full object-cover" onError={(e) => (e.currentTarget.style.visibility = "hidden")} />
       For <span className="font-medium text-fg">{product}</span>
       <span aria-hidden className="text-fg-3 transition-colors group-hover:text-fg-2">· Switch</span>
@@ -64,18 +64,18 @@ function ForProduct({ product, anim, dark, onSwitch }: { product: string; anim: 
   )
 }
 
-/** The thing you were working on, to go back to: wide, first on the page. */
+/** The thing you were working on, to go back to: the work big on the left, its name and the way in beside it. */
 function Continue({ shot, title, meta, action, onClick }: { shot: ReactNode; title: string; meta: string; action: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="tile lifts group grid w-full items-center gap-6 p-3 text-left sm:grid-cols-[minmax(0,360px)_1fr] sm:pr-8">
-      <span className="tile-media relative block overflow-hidden rounded-2xl bg-surface-2 shadow-[var(--print-sh)]">{shot}</span>
-      <span className="min-w-0 px-2 pb-2 sm:p-0">
-        <span className="block text-caption font-medium uppercase tracking-[0.08em] text-fg-3">Continue</span>
-        <span className="mt-2 block truncate text-section font-semibold tracking-[-0.02em]">{title}</span>
+    <button type="button" onClick={onClick} className="card group grid w-full items-center gap-6 text-left sm:grid-cols-[minmax(0,420px)_1fr] sm:gap-10">
+      <span className="card-shot">{shot}</span>
+      <span className="min-w-0">
+        <span className="block text-caption font-medium text-fg-3">Continue</span>
+        <span className="mt-1.5 block truncate text-section font-semibold tracking-[-0.02em]">{title}</span>
         <span className="mt-1 block truncate text-body text-fg-3">{meta}</span>
-        <span className="mt-5 inline-flex h-9 items-center gap-1.5 rounded-full bg-fg px-4 text-body font-medium text-surface transition-transform duration-150 group-hover:translate-x-0.5">
+        <span className="btn btn-ink mt-5 inline-flex h-9 items-center gap-1.5 rounded-lg px-4 text-body font-medium">
           {action}
-          <ArrowUpRight size={14} aria-hidden />
+          <ArrowUpRight size={14} aria-hidden className="transition-transform duration-200 ease-[var(--ease-out)] group-hover:-translate-y-0.5 group-hover:translate-x-0.5 motion-reduce:transition-none" />
         </span>
       </span>
     </button>
@@ -181,7 +181,7 @@ export function CreativesPage(p: { product: string; anim: string; overrides: Rec
       <div className="mt-12">
         <Continue
           onClick={p.onContinue}
-          title={yours ? `${p.product}, your canvas` : `Start a canvas for ${p.product}`}
+          title={yours ? `${yours.name || p.product}, your canvas` : `Start a canvas for ${p.product}`}
           meta={yours ? `${yours.layers.length} ${yours.layers.length === 1 ? "layer" : "layers"} · ${yours.frame.w} × ${yours.frame.h}` : "A frame with its screen, its name and its line, ready to arrange"}
           action={yours ? "Open in the Canvas" : "Start it"}
           shot={yours ? <DocSketch doc={yours} className="w-full" /> : all[0] ? <DocSketch doc={all[0].doc} className="w-full" /> : <span className="block aspect-[16/10]" />}

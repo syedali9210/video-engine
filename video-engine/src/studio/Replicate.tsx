@@ -138,7 +138,7 @@ export function Replicate({ api, state, setState, focus, onTaken, onPreview, onI
 
   return (
     <div className="scroll-thin min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
-      <section aria-label="A film to replicate" className="space-y-2.5 rounded-xl p-3 shadow-[inset_0_0_0_1px_var(--line)]">
+      <section aria-label="A film to replicate" className="space-y-2.5 rounded-xl bg-subtle p-3">
         <span className="block">
           <span className="block text-body font-medium">Replicate a launch film</span>
           <span className="block text-caption text-fg-3">The engine watches it twice: its cuts, then every shot's exact camera values and titles. It rebuilds the film from those numbers as a template, measured against the original. Your product's words and screens go where its own were.</span>
@@ -182,7 +182,7 @@ export function Replicate({ api, state, setState, focus, onTaken, onPreview, onI
           <h3 className="pb-2 text-caption font-medium text-fg-3">Found · not watched yet</h3>
           <ul className="grid gap-2 sm:grid-cols-2">
             {found.map((f) => (
-              <li key={f.id} className="flex gap-2.5 rounded-xl p-2 shadow-[inset_0_0_0_1px_var(--line)]">
+              <li key={f.id} className="flex gap-2.5 rounded-xl bg-subtle p-2">
                 <img src={`https://i.ytimg.com/vi/${f.id}/mqdefault.jpg`} alt="" loading="lazy" className="h-[54px] w-[96px] shrink-0 rounded-md bg-surface-2 object-cover" />
                 <span className="min-w-0 flex-1">
                   <a href={f.url} target="_blank" rel="noreferrer" className="line-clamp-2 text-caption font-medium hover:underline">
@@ -200,7 +200,7 @@ export function Replicate({ api, state, setState, focus, onTaken, onPreview, onI
       )}
 
       {busy?.what === "replicate" && (
-        <section role="status" aria-label="Replicating" className="rounded-xl p-3 shadow-[inset_0_0_0_1px_var(--line)]">
+        <section role="status" aria-label="Replicating" className="rounded-xl bg-subtle p-3">
           <span className="flex items-baseline justify-between gap-2">
             <Thinking variant="globe" label="Replicating…" />
             <span className="text-caption tabular-nums text-fg-3">{secs} s · usually one to three minutes</span>
@@ -215,7 +215,7 @@ export function Replicate({ api, state, setState, focus, onTaken, onPreview, onI
       {error && <Problem compact error={error} className="rounded-xl bg-surface px-4 py-3 shadow-[0_0_0_1px_var(--line)]" />}
 
       {result && (
-        <section aria-label="The replica" className="rounded-xl p-3 shadow-[inset_0_0_0_1px_var(--line)]">
+        <section aria-label="The replica" className="rounded-xl bg-subtle p-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <span className="min-w-0">
               <span className="block text-body font-medium">{result.proposal.script.name}</span>
@@ -316,7 +316,7 @@ export function Replicate({ api, state, setState, focus, onTaken, onPreview, onI
       {studied.length > 0 && (
         <section aria-label="Films studied">
           <h3 className="pb-2 text-caption font-medium text-fg-3">Films the lab has · replicating one it has watched costs one request (one already measured, none)</h3>
-          <ul className="divide-y rounded-xl shadow-[inset_0_0_0_1px_var(--line)]">
+          <ul className="divide-y">
             {studied.map((r) => (
               <li key={r.id} className="flex items-center gap-3 px-3 py-2">
                 <FilmReel size={14} aria-hidden className="shrink-0 text-fg-3" />

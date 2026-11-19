@@ -249,7 +249,7 @@ export function References({ api, state, setState, onInbox, onIdeas, onReplicate
           const f = e.dataTransfer.files[0]
           if (f) void take(f)
         }}
-        className={`rounded-xl p-3 ${drag ? "bg-sel/10 shadow-[inset_0_0_0_1.5px_var(--sel)]" : "shadow-[inset_0_0_0_1px_var(--line)]"}`}
+        className={`rounded-xl p-3 ${drag ? "bg-sel/10 shadow-[inset_0_0_0_1.5px_var(--sel)]" : "bg-subtle"}`}
       >
         <h3 className="text-body font-medium">Add {kind ? `a ${kind.name.toLowerCase()} reference` : `a ${AREAS.find((a) => a.id === area)!.name.toLowerCase().replace(/s$/, "")} reference`}</h3>
         <p className="mt-0.5 text-caption text-fg-3">
@@ -289,7 +289,7 @@ export function References({ api, state, setState, onInbox, onIdeas, onReplicate
       </section>
 
       {area === "film" && (
-        <section aria-label="Write a template" className="flex flex-wrap items-center gap-3 rounded-xl p-3 shadow-[inset_0_0_0_1px_var(--line)]">
+        <section aria-label="Write a template" className="flex flex-wrap items-center gap-3 rounded-xl bg-subtle p-3">
           <span className="min-w-0 flex-1">
             <span className="block text-body font-medium">Write a new {kind ? kind.name.toLowerCase() : "film"} template</span>
             <span className="block text-caption text-fg-3">
@@ -314,7 +314,7 @@ export function References({ api, state, setState, onInbox, onIdeas, onReplicate
             const titles = (r.kit ?? []).filter((k): k is KitTitle => k.kind === "title")
             const grounds = (r.kit ?? []).filter((k): k is KitGround => k.kind === "ground")
             return (
-              <li key={r.id} className="rounded-xl shadow-[inset_0_0_0_1px_var(--line)]">
+              <li key={r.id} className="rounded-xl bg-subtle">
                 <div className="flex gap-3 p-3">
                   {thumb(r) ? <img src={thumb(r)} alt="" loading="lazy" className="h-[68px] w-[120px] shrink-0 rounded-md bg-surface-2 object-cover" /> : <span aria-hidden className="h-[68px] w-[120px] shrink-0 rounded-md bg-surface-2" />}
                   <span className="min-w-0 flex-1">
@@ -432,7 +432,7 @@ export function References({ api, state, setState, onInbox, onIdeas, onReplicate
                         <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                           {titles.map((t) => (
                             <li key={t.id}>
-                              <span className="grid aspect-[16/9] place-items-center overflow-hidden rounded-lg bg-canvas px-2 text-center shadow-[inset_0_0_0_1px_var(--line)]">
+                              <span className="grid aspect-[16/9] place-items-center overflow-hidden rounded-lg bg-canvas px-2 text-center">
                                 <AnimSample anim={t.anim} text={t.text.length > 24 ? `${t.text.slice(0, 22).trim()}…` : t.text} className="text-[15px] leading-none" style={{ fontWeight: t.weight }} />
                               </span>
                               <span className="mt-1 block truncate text-fg-2">{t.name}</span>

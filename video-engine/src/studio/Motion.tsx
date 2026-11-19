@@ -17,8 +17,8 @@ const r2 = (x: number) => Math.round(x * 100) / 100
 
 export function Section({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
   return (
-    <section aria-label={title} className="border-b px-4 pb-4 pt-3.5 last:border-b-0">
-      <h3 className="flex min-h-5 items-center justify-between pb-2 text-caption font-medium text-fg-3">
+    <section aria-label={title} className="insp-section px-4 pb-5 pt-3.5">
+      <h3 className="flex min-h-6 items-center justify-between pb-2 text-[12.5px] font-semibold text-fg-2">
         {title}
         {aside && <span className="font-normal">{aside}</span>}
       </h3>
@@ -321,7 +321,7 @@ export function TitleAnimPicker({ id, current, onPick }: { id: string; current?:
                 title={p.hint}
                 className="press block w-full rounded-lg text-left"
               >
-                <span className={`grid aspect-[16/9] place-items-center overflow-hidden rounded-lg bg-canvas ${now?.id === p.id ? "shadow-[inset_0_0_0_1.5px_var(--sel)]" : "shadow-[inset_0_0_0_1px_var(--line)] hover:shadow-[inset_0_0_0_1px_var(--line-strong)]"}`}>
+                <span className={`grid aspect-[16/9] place-items-center overflow-hidden rounded-lg bg-canvas ${now?.id === p.id ? "shadow-[inset_0_0_0_1.5px_var(--sel)]" : "hover:shadow-[inset_0_0_0_1px_var(--line-strong)]"}`}>
                   <AnimSample anim={p.anim} text="Launch" className="text-[17px] font-semibold leading-none tracking-[-0.03em]" />
                 </span>
                 <span className="mt-1 block truncate px-0.5 text-caption font-medium text-fg-2">{p.name}</span>

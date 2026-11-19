@@ -29,7 +29,7 @@ function Chips({ label, options, on, set }: { label: string; options: { value: s
       <span className="block pb-1.5 text-caption text-fg-3">{label}</span>
       <div role="group" aria-label={label} className="flex flex-wrap gap-1.5">
         {options.map((o) => (
-          <button key={o.value} type="button" aria-pressed={on.includes(o.value)} onClick={() => set(toggle(on, o.value))} className={`press h-7 rounded-md px-2.5 text-caption font-medium ${on.includes(o.value) ? "bg-sel/15 text-fg shadow-[inset_0_0_0_1px_var(--sel)]" : "text-fg-2 shadow-[inset_0_0_0_1px_var(--line)] hover:bg-surface-2"}`}>
+          <button key={o.value} type="button" aria-pressed={on.includes(o.value)} onClick={() => set(toggle(on, o.value))} className={`press h-7 rounded-md px-2.5 text-caption font-medium ${on.includes(o.value) ? "bg-sel/15 text-fg shadow-[inset_0_0_0_1px_var(--sel)]" : "text-fg-2 hover:bg-surface-2"}`}>
             {o.label}
           </button>
         ))}

@@ -100,7 +100,7 @@ export function DirectionEditor({ brief, own, setOwn, onUse }: { brief: Brief; o
   useEffect(() => setMsg(null), [d.id])
   return (
     <div className="space-y-4 p-4">
-      <section className="space-y-2 rounded-xl p-3 shadow-[inset_0_0_0_1px_var(--line)]">
+      <section className="space-y-2 rounded-xl bg-subtle p-3">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-caption text-fg-3">Start from</span>
           <Select aria-label="Start from" value={base} onChange={(e) => start(e.target.value)} className={`${field} h-8 cursor-pointer px-2 text-body`}>
@@ -137,7 +137,7 @@ export function DirectionEditor({ brief, own, setOwn, onUse }: { brief: Brief; o
         )}
       </section>
 
-      <section aria-label="Its film" className="rounded-xl p-3 shadow-[inset_0_0_0_1px_var(--line)]">
+      <section aria-label="Its film" className="rounded-xl bg-subtle p-3">
         <div className="flex flex-wrap items-center gap-2">
           <input aria-label="Its name" value={d.name} onChange={(e) => set({ name: e.target.value })} className={`${field} h-8 min-w-0 flex-1 px-2.5 text-body font-medium`} />
           <span className="text-micro text-fg-3">{preview.shots.length} shots · {preview.shots.reduce((a, s) => a + s.dur, 0).toFixed(1)} s · {d.tempo} bpm</span>
@@ -160,7 +160,7 @@ export function DirectionEditor({ brief, own, setOwn, onUse }: { brief: Brief; o
         <Row label="Harmony">
           <span className="flex flex-wrap gap-1">
             {HARMONIES.map((h) => (
-              <button key={h.id} type="button" aria-pressed={d.harmony === h.id} title={h.hint} onClick={() => set({ harmony: h.id })} className={`press h-7 rounded-md px-2.5 text-caption font-medium ${d.harmony === h.id ? "bg-fg text-surface" : "text-fg-2 shadow-[inset_0_0_0_1px_var(--line)] hover:bg-surface-2"}`}>
+              <button key={h.id} type="button" aria-pressed={d.harmony === h.id} title={h.hint} onClick={() => set({ harmony: h.id })} className={`press h-7 rounded-md px-2.5 text-caption font-medium ${d.harmony === h.id ? "bg-fg text-surface" : "text-fg-2 hover:bg-surface-2"}`}>
                 {h.name}
               </button>
             ))}

@@ -95,7 +95,7 @@ export function SceneIdeas({ open, onClose, comp, picked, gemini, onAdd, copy }:
         <ul className="scroll-thin min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
           {!ideas.length && <li className="px-1 py-6 text-center text-caption text-fg-3">Nothing more by the rules from here: the film shows every part and ends on its name. Ask Gemini, or continue from another scene.</li>}
           {ideas.map((idea, i) => (
-            <li key={`${idea.by}-${i}-${idea.shot.name}`} className="flex items-start gap-3 rounded-lg p-3 shadow-[inset_0_0_0_1px_var(--line)]">
+            <li key={`${idea.by}-${i}-${idea.shot.name}`} className="flex items-start gap-3 rounded-lg bg-subtle p-3">
               <span aria-hidden className="k-tint k-ink mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md" style={kStyle(idea.by === "ai" ? "motion" : "scene")}>
                 {idea.by === "ai" ? <Lightbulb size={15} /> : idea.rule === "artist" ? <PaintBrush size={15} /> : <FilmSlate size={15} />}
               </span>

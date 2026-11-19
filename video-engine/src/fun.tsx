@@ -9,6 +9,7 @@
 // All of it stands still under prefers-reduced-motion.
 import { useEffect, useState } from "react"
 import { flushSync } from "react-dom"
+import { SESSION_GERUNDS } from "./quips"
 
 const still = () => typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches
 
@@ -168,13 +169,13 @@ export function useKonami(then: () => void) {
 
 /* ---------------- waiting, with a little wit ---------------- */
 
-const WAITS = ["Choosing between 47 shades of violet", "Teaching the cuts to carry each other", "Timing every title to the beat", "Asking the gradients to calm down", "Rehearsing the hook", "Letting the device find its light", "Arguing about kerning", "Giving the end card room to breathe"]
-/** A line that changes every couple of seconds while something long runs. */
+const WAITS = [...SESSION_GERUNDS, "Choosing between 47 shades of violet", "Teaching the cuts to carry each other", "Asking the gradients to calm down", "Arguing about kerning", "Giving the end card room to breathe"]
+/** A line that changes every couple of seconds while something long runs (slower when motion is reduced). */
 export function useWaitLine(on: boolean, seed = 0) {
   const [i, setI] = useState(seed)
   useEffect(() => {
     if (!on) return
-    const t = setInterval(() => setI((x) => x + 1), 2200)
+    const t = setInterval(() => setI((x) => x + 1), still() ? 3600 : 2200)
     return () => clearInterval(t)
   }, [on])
   return `${WAITS[i % WAITS.length]}…`

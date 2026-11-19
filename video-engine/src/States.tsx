@@ -3,12 +3,12 @@
 // `explain` turns any error the engine meets into those words and that step: the engine's server isn't answering, the
 // network's gone, the AI isn't set up, it's busy, it's out of requests for today, it took too long.
 import { createContext, useContext, type ReactNode } from "react"
-import { ArrowClockwise, CloudSlash, Gear, Hourglass, Key, PlugsConnected, WarningCircle, type Icon } from "@phosphor-icons/react"
+import { ArrowClockwise, CloudSlash, FilmReel, Gear, Hourglass, Key, PlugsConnected, WarningCircle, type Icon } from "@phosphor-icons/react"
 import { explain, type Trouble } from "./trouble"
 
 export { explain }
 
-const ICON: Record<Trouble["kind"], Icon> = { offline: CloudSlash, server: PlugsConnected, "ai-key": Key, "ai-busy": Hourglass, "ai-quota": Hourglass, timeout: Hourglass, unknown: WarningCircle }
+const ICON: Record<Trouble["kind"], Icon> = { offline: CloudSlash, server: PlugsConnected, renderer: FilmReel, "ai-key": Key, "ai-busy": Hourglass, "ai-quota": Hourglass, timeout: Hourglass, unknown: WarningCircle }
 
 /** The app's way to the AI's settings, for a problem's "Settings" button (App provides it). */
 export const OpenSettings = createContext<(() => void) | null>(null)
@@ -47,12 +47,12 @@ export function Problem({ error, onRetry, compact, className = "" }: { error: un
       </div>
     )
   return (
-    <div role="alert" className={`flex flex-col items-center px-6 py-10 text-center ${className}`}>
-      <span aria-hidden className="grid h-12 w-12 place-items-center rounded-[14px]" style={{ color: tone, background: `color-mix(in srgb, ${tone} 12%, transparent)`, boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${tone} 22%, transparent)` }}>
-        <I size={22} />
+    <div role="alert" className={`rise-in flex flex-col items-center px-6 py-12 text-center ${className}`}>
+      <span aria-hidden className="state-glyph" style={{ color: tone, background: `color-mix(in srgb, ${tone} 12%, transparent)`, boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${tone} 22%, transparent)` }}>
+        <I size={24} />
       </span>
-      <p className="mt-4 text-ui font-semibold">{t.title}</p>
-      <p className="mt-1 max-w-[46ch] text-body text-fg-3 text-pretty">{t.detail}</p>
+      <p className="mt-6 text-heading font-semibold tracking-[-0.01em]">{t.title}</p>
+      <p className="mt-1.5 max-w-[46ch] text-body text-fg-3 text-pretty">{t.detail}</p>
       <div className="mt-5">{actions}</div>
     </div>
   )
@@ -61,12 +61,12 @@ export function Problem({ error, onRetry, compact, className = "" }: { error: un
 /** Nothing here yet: what will be, and the one step that starts it. */
 export function Empty({ icon: I, title, sub, action, children, className = "" }: { icon: Icon; title: string; sub?: ReactNode; action?: ReactNode; children?: ReactNode; className?: string }) {
   return (
-    <div className={`flex flex-col items-center px-6 py-10 text-center ${className}`}>
-      <span aria-hidden className="grid h-12 w-12 place-items-center rounded-[14px] bg-surface-2 text-fg-2 shadow-[inset_0_0_0_1px_var(--line)]">
-        <I size={22} />
+    <div className={`rise-in flex flex-col items-center px-6 py-12 text-center ${className}`}>
+      <span aria-hidden className="state-glyph state-float bg-surface-2 text-fg-2">
+        <I size={24} />
       </span>
-      <p className="mt-4 text-ui font-semibold">{title}</p>
-      {sub && <p className="mt-1 max-w-[46ch] text-body text-fg-3 text-pretty">{sub}</p>}
+      <p className="mt-6 text-heading font-semibold tracking-[-0.01em]">{title}</p>
+      {sub && <p className="mt-1.5 max-w-[46ch] text-body text-fg-3 text-pretty">{sub}</p>}
       {action && <div className="mt-5 flex gap-2">{action}</div>}
       {children}
     </div>

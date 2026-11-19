@@ -2,7 +2,7 @@
 // patience), with the step that helps. Plain data: `npm run check` runs it; States.tsx draws it.
 
 export type Trouble = {
-  kind: "offline" | "server" | "ai-key" | "ai-busy" | "ai-quota" | "timeout" | "unknown"
+  kind: "offline" | "server" | "renderer" | "ai-key" | "ai-busy" | "ai-quota" | "timeout" | "unknown"
   title: string
   detail: string
   /** what helps: trying again, the AI's settings, or both */
@@ -17,6 +17,9 @@ export function explain(e: unknown, online = typeof navigator === "undefined" ||
   if (!online) return { kind: "offline", title: "You're offline", detail: "The AI needs the internet. Everything else keeps working; try again once you're back.", retry: true, settings: false }
   if (has(/failed to fetch|networkerror|load failed|npm run dev|server isn't answering|ECONNREFUSED/i))
     return { kind: "server", title: "The engine's server isn't answering", detail: "Start it with npm run dev in the project's folder, then try again.", retry: true, settings: false }
+  // exporting renders in headless Chrome and encodes with ffmpeg, both on the dev server's machine
+  if (has(/find Chrome or Edge|STUDIO_CHROME|needs ffmpeg|ffmpeg on your PATH/i))
+    return { kind: "renderer", title: /ffmpeg/i.test(msg) ? "Exporting a video needs ffmpeg" : "Exporting needs Chrome or Edge", detail: /ffmpeg/i.test(msg) ? "The engine encodes with ffmpeg on this machine. Install it (brew install ffmpeg), or set STUDIO_FFMPEG to it, then try again." : "The engine films each frame in headless Chrome on this machine. Install Chrome or Edge, or set STUDIO_CHROME to it, then try again.", retry: true, settings: false }
   if (has(/isn't set up|add (its|a|the) (gemini )?key|needs the work api|no key|api key/i))
     return { kind: "ai-key", title: "The AI isn't set up yet", detail: import.meta.env?.DEV === false ? "The AI runs when the engine runs on your own machine, with your key." : "Add a Gemini key in Lab → Settings → Work API. It stays on this machine.", retry: false, settings: true }
   if (has(/free tier|used up|quota|429|requests a day|out of requests/i))

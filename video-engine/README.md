@@ -13,8 +13,11 @@ npm run build    # the site, without the Lab
 
 ## Places
 
-- **Home**: one field that finds or starts anything (Ctrl K), your film, what's waiting for a verdict, your product, your
-  review links, what you opened.
+The sidebar on the left holds **New**, Search (Ctrl K), the Inbox and the places; Ctrl \ folds it to its glyphs.
+
+- **Home**: one composer that finds or starts anything, the ways to start under it, a three-step guide to your first
+  film, what's waiting for a verdict, what to pick up again (your film, your canvas, your product), templates and your
+  review links.
 - **Product**: drop your screens, a recording, the logo and the words once; every film and template takes them.
 - **Films**: continue your film, or start from a template by kind (product launch, feature, demo, brand, social, device
   mockup). Opening one goes into the Studio.

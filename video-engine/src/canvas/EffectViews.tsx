@@ -87,7 +87,7 @@ function Chips<T extends string>({ label, value, options, set, cols = 3 }: { lab
           role="radio"
           aria-checked={value === o.value}
           onClick={() => set(o.value)}
-          className={`press h-7 truncate rounded-md px-1.5 text-caption font-medium ${value === o.value ? "k-tint k-ink" : "text-fg-2 shadow-[inset_0_0_0_1px_var(--line)] hover:bg-surface-2 hover:text-fg"}`}
+          className={`press h-7 truncate rounded-md px-1.5 text-caption font-medium ${value === o.value ? "k-tint k-ink" : "text-fg-2 hover:bg-surface-2 hover:text-fg"}`}
           style={value === o.value ? ({ "--k": "var(--k-effect)" } as React.CSSProperties) : undefined}
         >
           {o.label}
@@ -200,7 +200,7 @@ export function EffectFields({ value: e, set, id }: { value: Effect; set: (e: Ef
             </span>
           ))}
           {inks.length < (scene ? 6 : 3) && (
-            <button type="button" aria-label="Add an ink" onClick={() => up({ colors: [ground, ...inks, inks.at(-1) ?? "#ffffff"] })} className="press grid h-8 w-8 place-items-center rounded-md text-fg-2 shadow-[inset_0_0_0_1px_var(--line)] hover:bg-surface-2">
+            <button type="button" aria-label="Add an ink" onClick={() => up({ colors: [ground, ...inks, inks.at(-1) ?? "#ffffff"] })} className="press grid h-8 w-8 place-items-center rounded-md text-fg-2 hover:bg-surface-2">
               <Plus size={13} />
             </button>
           )}

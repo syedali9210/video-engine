@@ -118,7 +118,7 @@ export function Checks({ config, size, scenes, onScene, onFix }: { config: () =>
         )}
         <label className="ml-auto flex items-center gap-1.5 text-caption text-fg-3">
           Target
-          <input type="number" min={3} max={180} value={target} onChange={(e) => setTarget(e.target.value ? Number(e.target.value) : "")} placeholder="—" className="h-7 w-14 rounded-md bg-surface-2 px-1.5 text-right text-caption text-fg shadow-[inset_0_0_0_1px_var(--line)]" />s
+          <input type="number" min={3} max={180} value={target} onChange={(e) => setTarget(e.target.value ? Number(e.target.value) : "")} placeholder="—" className="h-7 w-14 rounded-md bg-surface-2 px-1.5 text-right text-caption text-fg" />s
         </label>
       </div>
       {!r && !busy && !error && <p className="text-caption text-fg-3">Every scene, sampled on the export page itself: the words' size and contrast, the story, the shots' timing, the product's colours, and the critic's eye. A minute or so.</p>}

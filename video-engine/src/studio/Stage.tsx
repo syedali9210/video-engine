@@ -11,7 +11,7 @@ import { ANIMS, CATEGORIES, byId, withDefaults, type Value } from "../registry"
 import { DEVICES, type DeviceId } from "../devices"
 import type { KitItem } from "../refs"
 import { IconButton, MenuItem, Popover, closePopover } from "../ui"
-import { DockBack } from "../shell"
+
 import { VIEW, addDevice, at, devicesOf, starts, total, withValues, type Comp, type ComponentLayer, type FlatLayer, type Layer, type MovingLayer, type Scene } from "./comp"
 import { Lanes } from "./Lanes"
 import { kStyle, tone, type AddKind } from "./Layers"
@@ -111,8 +111,8 @@ export default function StudioStage({
   ops?: Ops
 }) {
   const PAD = compact ? 12 : 16
-  // a strip under the frame for the add-toolbar, so it never sits on the film
-  const FOOT = compact || !onAdd ? PAD : 68
+  // a strip under the frame for the add-toolbar, so it never sits on the film (on a compact stage too)
+  const FOOT = !onAdd ? PAD : compact ? 58 : 68
   const area = useRef<HTMLDivElement>(null)
   const shield = useRef<HTMLDivElement>(null)
   const view = useRef<ViewHandle>(null)
@@ -861,7 +861,6 @@ export default function StudioStage({
           // the canvas toolbar, Raylight's: what goes into the scene, one click away
           <div role="toolbar" aria-label="Add to the scene" className="absolute inset-x-0 bottom-2 z-20 flex justify-center px-3">
             <div className="dock">
-              <DockBack />
               {(
                 [
                   ["text", "Title", TextT, "text"],
@@ -905,8 +904,8 @@ export default function StudioStage({
       </div>
 
       {/* the timeline (and the layers' lanes under it) on its own card, floating on the ground */}
-      <div className={compact ? "" : "shrink-0 overflow-hidden border-t bg-surface"}>
-      <div role="group" aria-label="Timeline" className={`flex shrink-0 items-center gap-2 px-2 ${compact ? "h-14 border-t bg-surface" : "h-[60px]"}`}>
+      <div className={compact ? "" : "shrink-0 overflow-hidden bg-panel"}>
+      <div role="group" aria-label="Timeline" className={`flex shrink-0 items-center gap-2 px-2 ${compact ? "h-14 bg-panel" : "h-[60px]"}`}>
         <IconButton label={playing ? "Pause" : "Play"} tipSide="top" tipAlign="start" onClick={() => setPlaying(!playing)}>
           {playing ? <Pause size={16} /> : <Play size={16} />}
         </IconButton>

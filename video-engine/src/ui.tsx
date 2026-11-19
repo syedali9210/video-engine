@@ -102,7 +102,7 @@ export function Tip({ label, kbd, side = "bottom", align = "center", children }:
 }
 
 export const Kbd = ({ children }: { children: ReactNode }) => (
-  <kbd className="mono inline-grid h-[18px] min-w-[18px] place-items-center rounded-[4px] bg-surface-2 px-1 text-micro text-fg-3 shadow-[inset_0_0_0_1px_var(--line)]">{children}</kbd>
+  <kbd className="mono inline-grid h-[18px] min-w-[18px] place-items-center rounded-[4px] bg-surface-2 px-1 text-micro text-fg-3">{children}</kbd>
 );
 
 export function Count({ n, tone = "neutral" }: { n: number; tone?: "warn" | "bad" | "neutral" }) {
@@ -135,6 +135,8 @@ export function useFlip(el: { current: HTMLElement | null }, b: { x?: number; y?
   }, [x, y, w, h]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
+/** A choice of a few: the options as plain words, the picked one in ink with a short underline that glides to it.
+    No buttons, no well (the design system's "options"). Arrow keys move. Icon options can hide their words. */
 export function Segmented<T extends string | number>({
   value,
   options,
@@ -157,33 +159,26 @@ export function Segmented<T extends string | number>({
   hideLabels?: keyof typeof HIDE_BELOW;
   tipSide?: "top" | "bottom";
 }) {
-  const iconOnly = !!hideLabels && hideLabels !== "narrow";
-  // the picked segment's pill slides to it, measured from the button it sits under
+  // the underline slides to the picked option, measured from the word it sits under
   const box = useRef<HTMLDivElement>(null);
-  const [pill, setPill] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [mark, setMark] = useState<{ x: number; w: number } | null>(null);
   useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
     const place = () => {
-      const on = el.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]');
-      if (!on) return setPill(null);
+      const on = el.querySelector<HTMLElement>('[role="radio"][aria-checked="true"] .opt-word');
+      if (!on) return setMark(null);
       const a = el.getBoundingClientRect();
       const b = on.getBoundingClientRect();
-      setPill((p) => (p && p.x === b.left - a.left && p.w === b.width && p.y === b.top - a.top && p.h === b.height ? p : { x: b.left - a.left, y: b.top - a.top, w: b.width, h: b.height }));
+      setMark((p) => (p && p.x === b.left - a.left && p.w === b.width ? p : { x: b.left - a.left, w: b.width }));
     };
     place();
     const ro = new ResizeObserver(place);
     ro.observe(el);
     return () => ro.disconnect();
   }, [value, options.length]);
-  const pillEl = useRef<HTMLSpanElement>(null);
-  useFlip(pillEl, pill);
-  const sizing =
-    size === "sm"
-      ? `h-6 text-caption ${iconOnly ? "w-7" : "px-2"}`
-      : size === "lg"
-        ? `h-9 text-ui ${iconOnly ? "w-11" : "px-3.5"}`
-        : `h-7 text-body pointer-coarse:h-9 ${iconOnly ? "w-8 pointer-coarse:w-10" : hideLabels === "narrow" ? "px-2 @min-[50rem]:px-2.5" : "px-2.5"}`;
+  const markEl = useRef<HTMLSpanElement>(null);
+  useFlip(markEl, mark && { x: mark.x, w: mark.w });
   return (
     <div
       role="radiogroup"
@@ -199,16 +194,9 @@ export function Segmented<T extends string | number>({
         )
       }
       ref={box}
-      className={`relative ${full ? "flex w-full" : "inline-flex"} shrink-0 gap-0.5 rounded-[10px] bg-surface-2 p-[3px] shadow-[var(--in-well)]`}
+      className={`opts opts-${size} ${full ? "opts-full" : ""}`}
     >
-      {pill && (
-        <span
-          ref={pillEl}
-          aria-hidden
-          className="seg-pill pointer-events-none absolute left-0 top-0 origin-top-left rounded-[7px] bg-surface shadow-[var(--in-hi),0_1px_2px_rgb(0_0_0/0.14),0_0_0_1px_var(--line)] will-change-transform dark:bg-surface-3"
-          style={{ transform: `translate(${pill.x}px, ${pill.y}px)`, width: pill.w, height: pill.h }}
-        />
-      )}
+      {mark && <span ref={markEl} aria-hidden className="opt-mark" style={{ transform: `translateX(${mark.x}px)`, width: mark.w }} />}
       {options.map((o) => {
         const on = o.value === value;
         const btn = (
@@ -220,10 +208,12 @@ export function Segmented<T extends string | number>({
             aria-label={o.icon && hideLabels ? o.label : undefined}
             tabIndex={on ? 0 : -1}
             onClick={() => onChange(o.value)}
-            className={`press relative z-[1] flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[7px] font-medium transition-colors duration-200 ${full ? "flex-1" : ""} ${sizing} ${on ? "text-fg" : "text-fg-3 hover:text-fg"}`}
+            className="opt"
           >
-            {o.icon && <o.icon size={size === "lg" ? 18 : 16} aria-hidden className="shrink-0" />}
-            <span className={`truncate ${o.icon && hideLabels ? HIDE_BELOW[hideLabels] : ""}`}>{o.label}</span>
+            <span className="opt-word">
+              {o.icon && <o.icon size={size === "lg" ? 18 : size === "sm" ? 14 : 16} aria-hidden className="shrink-0" />}
+              <span className={`truncate ${o.icon && hideLabels ? HIDE_BELOW[hideLabels] : ""}`}>{o.label}</span>
+            </span>
           </button>
         );
         return o.kbd || (o.icon && hideLabels) ? (
@@ -253,7 +243,7 @@ export function Tabs<T extends string>({ value, onChange, options, label, id }: 
           "tab",
         )
       }
-      className="flex shrink-0 gap-4 border-b px-4"
+      className="flex shrink-0 gap-5 px-4"
     >
       {options.map((o) => {
         const on = o.value === value;
@@ -271,7 +261,7 @@ export function Tabs<T extends string>({ value, onChange, options, label, id }: 
           >
             {o.label}
             {o.badge}
-            <span aria-hidden className={`absolute inset-x-0 bottom-0 h-px ${on ? "bg-fg" : "bg-transparent"}`} />
+            <span aria-hidden className={`absolute inset-x-0 bottom-1 h-[2px] rounded-full transition-colors duration-150 ${on ? "bg-fg" : "bg-transparent"}`} />
           </button>
         );
       })}
@@ -320,7 +310,7 @@ export function IconButton({
         disabled={disabled}
         onClick={onClick}
         popoverTarget={popover}
-        className={`press grid shrink-0 place-items-center transition-colors duration-150 disabled:pointer-events-none disabled:opacity-35 ${box} ${active ? "bg-surface-3 text-fg" : "text-fg-2 hover:bg-surface-2 hover:text-fg"} ${className}`}
+        className={`press grid shrink-0 place-items-center transition-colors duration-150 disabled:pointer-events-none disabled:opacity-35 ${box} ${active ? "bg-selected text-fg" : "text-fg-2 hover:bg-hover hover:text-fg"} ${className}`}
       >
         {children}
       </button>
@@ -328,10 +318,11 @@ export function IconButton({
   );
 }
 
+// one primary per view (ink), quiet filled secondaries, and ghosts: no outlines, no bevels
 const LOOK = {
   primary: "btn btn-ink",
   secondary: "btn btn-2",
-  ghost: "text-fg-2 transition-colors duration-150 hover:bg-surface-2 hover:text-fg",
+  ghost: "text-fg-2 transition-colors duration-150 hover:bg-hover hover:text-fg",
 };
 
 export function Button({
@@ -390,14 +381,16 @@ export function Switch({ on, onChange, label, id, labelledBy, size = "md" }: { o
   );
 }
 
-/** The engine's mark: an easing curve with its two handles, in ink. */
-export function Logo({ size = 24 }: { size?: number }) {
+/** The engine's mark: a dot moving along an ease-out arc, with two onion-skin ghosts of where it was. On a tile it's
+    the app icon; bare (the default) it's ink on whatever it sits on. */
+export function Logo({ size = 24, tile }: { size?: number; tile?: boolean }) {
+  const ink = tile ? "var(--surface)" : "currentColor";
   return (
     <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden className="shrink-0">
-      <rect width="24" height="24" rx="6" fill="var(--fg)" />
-      <path d="M6.5 17C11.5 17 12.5 7 17.5 7" fill="none" stroke="var(--surface)" strokeWidth="1.8" strokeLinecap="round" />
-      <circle cx="6.5" cy="17" r="1.9" fill="var(--surface)" />
-      <circle cx="17.5" cy="7" r="1.9" fill="var(--surface)" />
+      {tile && <rect width="24" height="24" rx="7" fill="var(--fg)" />}
+      <circle cx="5" cy="18" r="2.1" fill={ink} opacity=".3" />
+      <circle cx="9.8" cy="13.6" r="3" fill={ink} opacity=".58" />
+      <circle cx="16.4" cy="8.6" r="4.6" fill={ink} />
     </svg>
   );
 }
@@ -415,7 +408,8 @@ export function Popover({
   id: string;
   children: ReactNode;
   align?: Align;
-  side?: "top" | "bottom";
+  /** "right": beside its trigger (the sidebar's menus), its top or (align end) its foot level with it */
+  side?: "top" | "bottom" | "right";
   className?: string;
   label?: string;
   onToggle?: (open: boolean) => void;
@@ -428,6 +422,14 @@ export function Popover({
       if (!t) return;
       const r = el.getBoundingClientRect();
       const gap = 6;
+      if (side === "right") {
+        const left = Math.max(8, Math.min(innerWidth - r.width - 8, t.right + gap + 4));
+        const top = Math.max(8, Math.min(innerHeight - r.height - 8, align === "end" ? t.bottom - r.height : t.top));
+        el.style.left = `${left}px`;
+        el.style.top = `${top}px`;
+        el.style.setProperty("--origin", `left ${align === "end" ? "bottom" : "top"}`);
+        return;
+      }
       let left = align === "start" ? t.left : align === "end" ? t.right - r.width : t.left + t.width / 2 - r.width / 2;
       left = Math.max(8, Math.min(innerWidth - r.width - 8, left));
       const below = t.bottom + gap;

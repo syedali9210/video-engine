@@ -30,10 +30,10 @@ export function health(devices: Device[], perf: Record<string, Perf>, hostTflops
 
 export default function Inspector({ title, icon, actions, children }: { title: string; /** the picked thing's kind, in its colour */ icon?: ReactNode; actions?: ReactNode; children: ReactNode }) {
   return (
-    <aside id="inspector" aria-label={title} tabIndex={-1} className="flex w-[272px] shrink-0 flex-col overflow-hidden border-l bg-surface outline-none xl:w-[288px]">
-      <div className="flex h-12 shrink-0 items-center gap-2.5 border-b pl-4 pr-2.5">
+    <aside id="inspector" aria-label={title} tabIndex={-1} className="flex w-[272px] shrink-0 flex-col overflow-hidden bg-panel outline-none xl:w-[var(--inspector-w)]">
+      <div className="flex h-14 shrink-0 items-center gap-2.5 pl-4 pr-2.5">
         {icon}
-        <h2 className="mr-auto truncate text-body font-semibold">{title}</h2>
+        <h2 className="panel-title mr-auto truncate">{title}</h2>
         {actions}
       </div>
       {/* a new pick's settings rise in, so the change reads */}
@@ -52,8 +52,8 @@ export function PropertiesPanel({ anim, values, setParam, big, cols }: { anim: A
   return (
     <div className={cols ? "columns-2 gap-0 pb-2 [column-rule:1px_solid_var(--line)]" : "pb-2"}>
       {groups.map(([g, list]) => (
-        <section key={g} aria-label={g} className={`break-inside-avoid px-4 pb-4 pt-3 ${cols ? "" : "border-b last:border-b-0"}`}>
-          <h3 className="flex min-h-8 items-center pb-1 text-body font-semibold text-fg">{g}</h3>
+        <section key={g} aria-label={g} className={`insp-section break-inside-avoid px-4 pb-4 pt-3 ${cols ? "!shadow-none" : ""}`}>
+          <h3 className="flex min-h-8 items-center pb-1 text-[12.5px] font-semibold text-fg-2">{g}</h3>
           {list.map(([k, s]) => (
             <ParamRow key={k} k={k} s={s} value={values[k]} def={anim.params[k]} set={(v) => setParam(k, v)} big={big} />
           ))}

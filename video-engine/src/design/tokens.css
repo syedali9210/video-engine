@@ -1,0 +1,244 @@
+/* ======================================================================================================================
+   Video Engine design tokens. Three tiers, each built only from the one above it:
+
+   1. Primitives  — raw values: the gray scale (12 steps, swapped per theme), accent, brand, status colours, space,
+                    radius, type, motion, elevation, z-index. Never used by a component directly.
+   2. Semantic    — what a value is FOR: --bg-app, --bg-panel, --text-2, --border-1, --accent, --focus… Components
+                    use these, so a theme is only a different set of primitives.
+   3. Component   — the few sizes a component family shares: control heights, the sidebar's width, the inspector's.
+
+   The older names the app grew up with (--canvas, --surface, --fg-2, --line…) are aliases at the foot of this file,
+   pointing at the semantic tier, so every screen follows a change made here.
+
+   Gray steps follow one meaning in both themes (after Radix's scale):
+     1 app ground · 2 panel · 3 subtle fill · 4 hover · 5 pressed/selected · 6 hairline · 7 border · 8 strong border
+     9 solid mark · 10 tertiary text · 11 secondary text · 12 primary text
+   ====================================================================================================================== */
+
+/* ---------------- 1. primitives ---------------- */
+:root {
+  /* gray, light: a hint of warmth, paper rather than screen */
+  --gray-1: #fbfbfa;
+  --gray-2: #ffffff;
+  --gray-3: #f3f3f0;
+  --gray-4: #ecece8;
+  --gray-5: #e4e4df;
+  --gray-6: rgb(28 28 20 / 0.075);
+  --gray-7: rgb(28 28 20 / 0.12);
+  --gray-8: rgb(28 28 20 / 0.2);
+  --gray-9: #8d8d87;
+  --gray-10: #6b6b65; /* 5.2:1 on step 1, 4.7:1 on step 3 */
+  --gray-11: #55554f; /* 7.3:1 */
+  --gray-12: #1b1b19; /* 16:1 */
+
+  /* accent: the selection, the playhead, focus. One blue. */
+  --blue-9: #0b6bff;
+  --blue-11: #0057d6;
+  --blue-a3: rgb(11 107 255 / 0.1);
+
+  /* the brand: the engine's own art (the mark's trail, the making ring, posters). Never a control. */
+  --brand-1: #3d6bff;
+  --brand-2: #8b5cf6;
+  --brand-3: #ff6fae;
+
+  /* status: always with a word or a shape, never colour alone */
+  --green-9: #1f9d6f;
+  --green-11: #12805c;
+  --amber-9: #e5a00d;
+  --amber-11: #9a4d00;
+  --red-9: #e5484d;
+  --red-11: #c4252b;
+
+  /* space: a 4 px grid */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* radius: small things are tight, large things are soft */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-full: 9999px;
+
+  /* type */
+  --font-ui: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-code: "Geist Mono", ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  --font-display: "Instrument Serif", ui-serif, Georgia, serif;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --tracking-tight: -0.02em;
+  --tracking-display: -0.035em;
+
+  /* motion: short and decisive; the reduced-motion block sets every duration to 0 */
+  --dur-0: 0ms;
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+  --dur-3: 320ms;
+  --dur-4: 500ms;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* elevation: only floating things cast shadows; regions are told apart by tone */
+  --shadow-1: 0 1px 2px rgb(20 20 10 / 0.06);
+  --shadow-2: 0 0 0 1px rgb(20 20 10 / 0.06), 0 4px 12px -4px rgb(20 20 10 / 0.12);
+  --shadow-3: 0 0 0 1px rgb(20 20 10 / 0.07), 0 12px 28px -10px rgb(20 20 10 / 0.18);
+  --shadow-4: 0 0 0 1px rgb(20 20 10 / 0.08), 0 24px 56px -16px rgb(20 20 10 / 0.26);
+
+  /* layers */
+  --z-base: 0;
+  --z-sticky: 10;
+  --z-panel: 30;
+  --z-dock: 40;
+  --z-popover: 60;
+  --z-tooltip: 70;
+  --z-toast: 80;
+  --z-card: 85;
+}
+
+.dark {
+  /* gray, dark: soft charcoal, never pure black */
+  --gray-1: #0e0e0f;
+  --gray-2: #151516;
+  --gray-3: #1b1b1d;
+  --gray-4: #222225;
+  --gray-5: #2a2a2e;
+  --gray-6: rgb(255 255 255 / 0.065);
+  --gray-7: rgb(255 255 255 / 0.1);
+  --gray-8: rgb(255 255 255 / 0.17);
+  --gray-9: #5f5f66;
+  --gray-10: #8a8a91; /* 5.4:1 on step 2, 4.7:1 on step 4 */
+  --gray-11: #a9a9b0; /* 8:1 */
+  --gray-12: #ededee; /* 16:1 */
+
+  --blue-9: #2b8cff;
+  --blue-11: #6cb0ff;
+  --blue-a3: rgb(43 140 255 / 0.14);
+
+  --green-9: #2fb383;
+  --green-11: #52cf9a;
+  --amber-9: #f5b334;
+  --amber-11: #ffc04d;
+  --red-9: #e5484d;
+  --red-11: #ff6b70;
+
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-2: 0 0 0 1px rgb(255 255 255 / 0.07), 0 6px 16px -6px rgb(0 0 0 / 0.7);
+  --shadow-3: 0 0 0 1px rgb(255 255 255 / 0.08), 0 16px 36px -12px rgb(0 0 0 / 0.8);
+  --shadow-4: 0 0 0 1px rgb(255 255 255 / 0.09), 0 32px 72px -20px rgb(0 0 0 / 0.9);
+}
+
+/* ---------------- 2. semantic ---------------- */
+:root,
+.dark {
+  /* surfaces, from the ground up */
+  --bg-app: var(--gray-1); /* the window: sidebar, rails, editor bars */
+  --bg-panel: var(--gray-2); /* side panels, the page sheet */
+  --bg-stage: var(--gray-3); /* where the work sits in an editor */
+  --bg-subtle: var(--gray-3); /* fields, a quiet fill */
+  --bg-hover: var(--gray-4);
+  --bg-selected: var(--gray-5);
+  --bg-raised: var(--gray-2); /* menus, popovers, dialogs (with --shadow-3/4) */
+  --bg-inverse: var(--gray-12); /* the one primary action per view */
+  --bg-overlay: rgb(0 0 0 / 0.45); /* behind a dialog */
+
+  /* text */
+  --text-1: var(--gray-12);
+  --text-2: var(--gray-11);
+  --text-3: var(--gray-10);
+  --text-disabled: var(--gray-9);
+  --text-inverse: var(--gray-2);
+
+  /* lines */
+  --border-1: var(--gray-6); /* hairline: only where tone can't separate */
+  --border-2: var(--gray-7);
+  --border-3: var(--gray-8);
+
+  /* meaning */
+  --selection: var(--blue-9); /* what's picked, the playhead, the focus ring */
+  --selection-text: var(--blue-11);
+  --selection-soft: var(--blue-a3);
+  --focus: var(--blue-9);
+  --success: var(--green-9);
+  --success-text: var(--green-11);
+  --warning: var(--amber-9);
+  --warning-text: var(--amber-11);
+  --danger: var(--red-9);
+  --danger-text: var(--red-11);
+  --brand: linear-gradient(135deg, var(--brand-1), var(--brand-2) 55%, var(--brand-3));
+}
+.dark {
+  --bg-stage: var(--gray-3);
+  --bg-raised: #19191b;
+  --bg-overlay: rgb(0 0 0 / 0.6);
+}
+
+/* ---------------- 3. component ---------------- */
+:root {
+  --control-h-sm: 28px;
+  --control-h: 32px;
+  --control-h-lg: 40px;
+  --control-radius: var(--radius-md);
+  --card-radius: var(--radius-xl);
+  --sheet-radius: var(--radius-xl);
+  --sidebar-w: 240px;
+  --sidebar-w-folded: 64px;
+  --rail-w: 52px;
+  --panel-w: 248px;
+  --inspector-w: 288px;
+  --bar-h: 48px;
+  /* a choice that's picked: ink and an underline that glides to it */
+  --option-mark-h: 2px;
+}
+
+/* ---------------- legacy names → semantic tokens ---------------- */
+:root,
+.dark {
+  --canvas: var(--bg-app);
+  --surface: var(--bg-panel);
+  --surface-2: var(--bg-subtle);
+  --surface-3: var(--bg-selected);
+  --overlay: var(--bg-raised);
+  --line: var(--border-1);
+  --line-strong: var(--border-2);
+  --fg: var(--text-1);
+  --fg-2: var(--text-2);
+  --fg-3: var(--text-3);
+  --sel: var(--selection);
+  --sel-ink: var(--selection-text);
+  /* "accent" was the ink of a primary button, a switch that's on, a slider's fill */
+  --accent: var(--text-1);
+  --accent-hover: var(--text-1);
+  --accent-ink: var(--text-1);
+  --accent-soft: var(--border-1);
+  --good: var(--success);
+  --good-ink: var(--success-text);
+  --warn: var(--warning);
+  --warn-ink: var(--warning-text);
+  --bad: var(--danger);
+  --bad-ink: var(--danger-text);
+  --on-accent: var(--text-inverse);
+  --scrim: var(--bg-overlay);
+  --sh-md: var(--shadow-3);
+  --sh-lg: var(--shadow-4);
+  --btn-ink: var(--bg-inverse);
+  --btn-ink-sh: none;
+  --btn-2: var(--bg-subtle);
+  --btn-2-sh: none;
+  --tip-bg: var(--gray-12);
+  --tip-fg: var(--gray-2);
+  --veil: var(--bg-app);
+}

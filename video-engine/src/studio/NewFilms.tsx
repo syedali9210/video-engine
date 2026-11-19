@@ -297,7 +297,7 @@ export function NewFilms({ films, taste, gallery, onPreview, onChanged }: { film
           </Grid>
         )}
         {list !== null && !shown.length && !(making && shelf === "waiting") && (
-          <div className="flex flex-col items-center rounded-xl border border-dashed px-6 py-16 text-center">
+          <div className="flex flex-col items-center px-6 py-16 text-center">
             <Snooze title={shelf === "waiting" ? "Nothing to review" : shelf === "kept" ? "Nothing kept yet" : "Nothing passed on"} sub={shelf === "waiting" ? "Four films, each a different kind of film and art direction, made for your product." : "Films you decide on land here, with what you said."} />
             {shelf === "waiting" && (
               <button type="button" onClick={() => void make()} disabled={!films || making} className="press btn btn-2 -mt-4 h-9 rounded-lg px-4 text-[14px] font-medium">
@@ -368,7 +368,7 @@ export function PageHead({ title, sub, action, children }: { title: string; sub?
   )
 }
 
-/** The shelves, as the app's one category control (pills in a well, a pill sliding to the pick). */
+/** The shelves, as the app's one category control (words in a row, a line gliding under the pick). */
 export function Underline<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: { value: T; label: string; count?: number }[] }) {
   return (
     <div className="px-8 pt-2">

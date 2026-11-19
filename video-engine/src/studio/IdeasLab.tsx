@@ -63,7 +63,7 @@ function IdeaCard({ idea, film, read, kept, busy, onPreview, onSend, onKeep }: {
   const [open, setOpen] = useState(false)
   const source = idea.from === "ai" ? "Gemini" : idea.from === "study" ? `After “${idea.ref}”` : "The rules"
   return (
-    <li className="rounded-xl p-3 shadow-[inset_0_0_0_1px_var(--line)]">
+    <li className="rounded-xl bg-subtle p-3">
       <div className="flex items-start justify-between gap-3">
         <span className="min-w-0">
           <span className="block text-body font-medium">{idea.title}</span>
@@ -217,7 +217,7 @@ export function IdeasLab({ api, state, gallery, comp, refs, taste, focus, onPrev
       ) : (
         <>
           {view === "new" && (
-            <section aria-label="Make ideas" className="space-y-2.5 rounded-xl p-3 shadow-[inset_0_0_0_1px_var(--line)]">
+            <section aria-label="Make ideas" className="space-y-2.5 rounded-xl bg-subtle p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="min-w-0">
                   <span className="block text-body font-medium">Ideas for films</span>
@@ -315,7 +315,7 @@ function Critic({ api, state, gallery, comp, refs, taste, onPreview, onInbox }: 
           <Play size={14} />
         </IconButton>
       </div>
-      <div className="rounded-xl p-3 shadow-[inset_0_0_0_1px_var(--line)]">
+      <div className="rounded-xl bg-subtle p-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <span className="text-body font-medium">{film.name}</span>
           <span className="text-micro tabular-nums text-fg-3">
@@ -370,7 +370,7 @@ function Critic({ api, state, gallery, comp, refs, taste, onPreview, onInbox }: 
       {cuts.length > 0 && (
         <div>
           <h3 className="pb-1.5 text-caption font-medium text-fg-3">Cut by cut</h3>
-          <ol className="divide-y rounded-xl shadow-[inset_0_0_0_1px_var(--line)]">
+          <ol className="divide-y">
             {cuts.map((c) => (
               <li key={c.at} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 px-3 py-2">
                 <span className="min-w-0">

@@ -204,7 +204,7 @@ export function CreateDialog({ open, onClose, ctx, anchors, onPick, kind }: { op
           </div>
           <div role="radiogroup" aria-label="Harmony" className="flex flex-wrap items-center gap-1">
             {HARMONIES.map((h) => (
-              <button key={h.id} type="button" role="radio" aria-checked={harmony === h.id} title={h.hint} onClick={() => setHarmony(h.id)} className={`press h-7 rounded-md px-2.5 text-caption font-medium ${harmony === h.id ? "bg-fg text-surface" : "text-fg-2 shadow-[inset_0_0_0_1px_var(--line)] hover:bg-surface-2"}`}>
+              <button key={h.id} type="button" role="radio" aria-checked={harmony === h.id} title={h.hint} onClick={() => setHarmony(h.id)} className={`press h-7 rounded-md px-2.5 text-caption font-medium ${harmony === h.id ? "bg-fg text-surface" : "text-fg-2 hover:bg-surface-2"}`}>
                 {h.name}
               </button>
             ))}
@@ -238,7 +238,7 @@ export function CreateDialog({ open, onClose, ctx, anchors, onPick, kind }: { op
             const short = (c.needs ?? 0) > ctx.more.length
             return (
               <li key={c.id}>
-                <button type="button" disabled={short} onClick={() => onPick(doc, c)} className="press group flex w-full flex-col gap-2 rounded-lg p-1.5 text-left shadow-[inset_0_0_0_1px_var(--line)] enabled:hover:bg-surface-2 enabled:hover:shadow-[inset_0_0_0_1px_var(--line-strong)] disabled:cursor-not-allowed">
+                <button type="button" disabled={short} onClick={() => onPick(doc, c)} className="press group flex w-full flex-col gap-2 rounded-lg p-1.5 text-left enabled:hover:bg-surface-2 enabled:hover:shadow-[inset_0_0_0_1px_var(--line-strong)] disabled:cursor-not-allowed">
                   <DocSketch doc={doc} className={`w-full rounded-md ${short ? "opacity-40 grayscale" : ""}`} />
                   <span className="px-1 pb-1">
                     <span className="flex items-baseline justify-between gap-2">

@@ -66,7 +66,7 @@ function WordsPanel({ copy, set, type, setType }: { copy: Copy; set: (c: Copy) =
   )
   const f = [0, 1, 2].map((i) => copy.features[i] ?? "")
   return (
-    <div className="grid gap-2.5 rounded-xl p-3 shadow-[inset_0_0_0_1px_var(--line)] sm:grid-cols-2">
+    <div className="grid gap-2.5 rounded-xl bg-subtle p-3 sm:grid-cols-2">
       {line("name", "The name", "Coins & Notes")}
       {line("kicker", "The kicker (small, over the name)", "Introducing")}
       {line("hook", "The hook (the first second)", "Money that moves with you.")}
@@ -147,7 +147,7 @@ export function ArtistDialog({ open, onClose, accents, getCopy, screens, compone
     <Dialog open={open} onClose={onClose} label="The Artist" className="modal wide">
       <div className="flex h-full max-h-[inherit] flex-col">
         <DialogHead icon={PaintBrush} tone="brand" title="The Artist" sub={`Three takes on a film${copy?.name ? ` for ${copy.name}` : ""}, each a different art direction, every part editable.`} onClose={onClose} />
-        <div className="space-y-2.5 border-y px-5 py-3">
+        <div className="space-y-2.5 px-5 py-3">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <Segmented
               size="sm"
@@ -192,7 +192,7 @@ export function ArtistDialog({ open, onClose, accents, getCopy, screens, compone
               </div>
             </Popover>
             {mode !== "direction" && copy && (
-              <Button size="sm" variant={words ? "primary" : "secondary"} aria-expanded={words} onClick={() => setWords((w) => !w)}>
+              <Button size="sm" variant={words ? "secondary" : "ghost"} aria-expanded={words} onClick={() => setWords((w) => !w)}>
                 Words and type
               </Button>
             )}
@@ -205,13 +205,13 @@ export function ArtistDialog({ open, onClose, accents, getCopy, screens, compone
           {mode !== "direction" && copy && words && <WordsPanel copy={copy} set={setCopy} type={type} setType={setType} />}
           {mode !== "direction" && (
             <>
-              <div role="radiogroup" aria-label="Art direction" className="scroll-thin flex gap-1.5 overflow-x-auto pb-1">
+              <div role="radiogroup" aria-label="Art direction" className="scroll-thin flex gap-4 overflow-x-auto pb-1">
                 {kinds.map((k) => {
                   const d = [...DIRECTIONS, ...own].find((x) => x.id === k.id)
                   const look = d ? lookFor(d.anchor ?? accent, d.harmony, 1) : null
                   return (
-                    <button key={k.id} type="button" role="radio" aria-checked={style === k.id} onClick={() => setStyle(k.id)} className={`press flex h-8 shrink-0 items-center gap-2 rounded-full pl-1 pr-3 text-caption font-medium ${style === k.id ? "bg-fg text-surface" : "text-fg-2 shadow-[inset_0_0_0_1px_var(--line-strong)] hover:text-fg"}`}>
-                      <span aria-hidden className="h-6 w-6 rounded-full bg-cover bg-center shadow-[inset_0_0_0_1px_rgb(127_127_127/0.3)]" style={{ backgroundColor: look?.ground ?? "transparent", backgroundImage: d?.own?.picture ? `url(${d.own.picture})` : d && look ? layersCss(gradient(d.grounds.reveal, look, { energy: d.energy, spread: d.spread, speed: 0 }), 24, 24) : "conic-gradient(from 0deg, #f59e0b, #ec4899, #8b5cf6, #3b82f6, #10b981, #f59e0b)" }} />
+                    <button key={k.id} type="button" role="radio" aria-checked={style === k.id} onClick={() => setStyle(k.id)} className={`press flex h-9 shrink-0 items-center gap-2 text-[13px] font-medium transition-colors duration-150 ${style === k.id ? "text-fg" : "text-fg-3 hover:text-fg"}`}>
+                      <span aria-hidden className={`h-6 w-6 rounded-full bg-cover bg-center transition-shadow duration-150 ${style === k.id ? "shadow-[0_0_0_2px_var(--bg-raised),0_0_0_3.5px_var(--text-1)]" : "shadow-[inset_0_0_0_1px_rgb(127_127_127/0.3)]"}`} style={{ backgroundColor: look?.ground ?? "transparent", backgroundImage: d?.own?.picture ? `url(${d.own.picture})` : d && look ? layersCss(gradient(d.grounds.reveal, look, { energy: d.energy, spread: d.spread, speed: 0 }), 24, 24) : "conic-gradient(from 0deg, #f59e0b, #ec4899, #8b5cf6, #3b82f6, #10b981, #f59e0b)" }} />
                       {k.name}
                     </button>
                   )
@@ -234,7 +234,7 @@ export function ArtistDialog({ open, onClose, accents, getCopy, screens, compone
             />
           </div>
         ) : (
-        <div className="scroll-thin min-h-0 flex-1 overflow-y-auto bg-canvas p-5">
+        <div className="scroll-thin min-h-0 flex-1 overflow-y-auto p-5">
           {!copy ? (
             <div className="grid place-items-center p-12">
               <Thinking variant="globe" label="Reading the product's words…" sub="Its name, its line, what it does" />
@@ -242,20 +242,20 @@ export function ArtistDialog({ open, onClose, accents, getCopy, screens, compone
           ) : (
             <>
               {/* three takes side by side: compare them at a glance, the critic's read on each */}
-              <ul className="grid gap-4 md:grid-cols-3">
+              <ul className="grid gap-x-6 gap-y-8 md:grid-cols-3">
                 {made.map((film, i) => {
                   const a = read.get(film.id)
                   const secs = film.shots.reduce((x, s) => x + s.dur, 0)
                   const d = [...DIRECTIONS, ...own].find((x) => x.id === film.artist?.style)
                   return (
-                    <li key={film.id} className="rise-in flex flex-col overflow-hidden rounded-xl border bg-surface" style={{ animationDelay: `${i * 50}ms` }}>
-                      <button type="button" onClick={() => use(film)} className="press group block text-left" aria-label={mode === "film" ? `Use ${film.name}` : `Use the stills in ${d?.name ?? "this direction"}`}>
-                        <span className="relative block">
+                    <li key={film.id} className="rise-in flex flex-col" style={{ animationDelay: `${i * 50}ms` }}>
+                      <button type="button" onClick={() => use(film)} className="card group block text-left" aria-label={mode === "film" ? `Use ${film.name}` : `Use the stills in ${d?.name ?? "this direction"}`}>
+                        <span className="card-shot">
                           <ScriptPoster script={film} product={copy.name} className="rounded-none shadow-none" />
                           {a && mode === "film" && <span className="absolute right-2 top-2 rounded-md bg-black/55 px-1.5 py-0.5 text-[12px] font-semibold tabular-nums text-white backdrop-blur-sm">{a.score}</span>}
                         </span>
                       </button>
-                      <div className="flex flex-1 flex-col p-4">
+                      <div className="flex flex-1 flex-col pt-3">
                         <p className="text-[12px] text-fg-3">{d?.name ?? film.artist?.style}</p>
                         <p className="mt-0.5 truncate text-[15px] font-semibold tracking-[-0.01em]">{film.name}</p>
                         <p className="mt-1 text-[13px] tabular-nums text-fg-3">

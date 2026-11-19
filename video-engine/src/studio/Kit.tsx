@@ -180,7 +180,7 @@ export function KitPanel({ onUse, onReferences }: { onUse: (item: KitItem) => vo
       )}
       {error && <p className="px-4 pt-3 text-caption text-fg-3">The kit's studied pieces didn't load ({error}): the built-in ones are here.</p>}
       {!kit.items.length && !error && (
-        <div className="mx-3 mt-3 rounded-lg p-3 shadow-[inset_0_0_0_1px_var(--line)]">
+        <div className="mx-3 mt-3 rounded-lg bg-subtle p-3">
           <p className="text-caption text-fg-2">Tear a film down in the lab and its titles, backgrounds and shots land here, ready to drag in.</p>
           <Button size="sm" className="mt-2" onClick={onReferences}>
             <BookOpen size={14} aria-hidden />
@@ -194,7 +194,7 @@ export function KitPanel({ onUse, onReferences }: { onUse: (item: KitItem) => vo
           {titles.map((t) => (
             <li key={t.id}>
               <button type="button" draggable onDragStart={drag(t)} onClick={() => onUse(t)} title={`${t.name} · ${from(t)}: drag it onto the stage, or click to add it`} className="press block w-full cursor-grab rounded-lg text-left active:cursor-grabbing">
-                <span className="grid aspect-[16/10] place-items-center overflow-hidden rounded-lg bg-canvas px-2 text-center shadow-[inset_0_0_0_1px_var(--line)] hover:shadow-[inset_0_0_0_1px_var(--line-strong)]">
+                <span className="grid aspect-[16/10] place-items-center overflow-hidden rounded-lg bg-canvas px-2 text-center hover:shadow-[inset_0_0_0_1px_var(--line-strong)]">
                   <AnimSample
                     anim={t.anim}
                     text={t.text.length > 22 ? `${t.text.slice(0, 20).trim()}…` : t.text}

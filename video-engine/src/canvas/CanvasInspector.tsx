@@ -57,7 +57,7 @@ export function CanvasInspector(p: Props) {
   if (!p.node) return <FramePanel {...p} />
   return (
     <div>
-      <div className="sticky top-0 z-10 border-b bg-surface px-4 py-2.5">
+      <div className="sticky top-0 z-10 bg-panel px-4 py-2.5">
         <Segmented<"design" | "interact">
           full
           size="sm"
@@ -248,7 +248,7 @@ function Turn3D({ node: n, set, view }: { node: DeviceNode; set: Props["set"]; v
     <Section title="Turn in 3D" aside={r.x || r.y || rot ? `X ${Math.round(r.x)}° · Y ${Math.round(r.y)}° · Z ${Math.round(rot)}°` : undefined}>
       <div role="group" aria-label="Turns" className="grid grid-cols-3 gap-1">
         {TURNS.map((t) => (
-          <button key={t.label} type="button" onClick={() => to(t.x, t.y)} aria-pressed={r.x === t.x && r.y === t.y} className={`press h-7 rounded-md text-caption font-medium ${r.x === t.x && r.y === t.y ? "k-tint k-ink" : "text-fg-2 shadow-[inset_0_0_0_1px_var(--line)] hover:bg-surface-2"}`} style={{ "--k": "var(--k-device)" } as React.CSSProperties}>
+          <button key={t.label} type="button" onClick={() => to(t.x, t.y)} aria-pressed={r.x === t.x && r.y === t.y} className={`press h-7 rounded-md text-caption font-medium ${r.x === t.x && r.y === t.y ? "k-tint k-ink" : "text-fg-2 hover:bg-surface-2"}`} style={{ "--k": "var(--k-device)" } as React.CSSProperties}>
             {t.label}
           </button>
         ))}

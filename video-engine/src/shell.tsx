@@ -1,9 +1,9 @@
-// The frame every place sits in. On a desktop one floating glass island at the bottom of the window is how you move
-// around: Home, Product, Films, Creatives and (on this machine) the Lab, then find, what's waiting, New and you.
-// Above it, Home and the galleries are pages (a big title, one row of category pills, the work drawn big). Opening
-// something goes full-screen into its editor, whose dock is the same glass and starts with the way back.
+// The frame every place sits in. On a desktop a sidebar on the ground is how you move around: New and Search first,
+// then Home, Product, Films, Creatives and (on this machine) the Lab, what you opened lately, and you. Beside it, Home
+// and the galleries are pages on one sheet (a title, one line, one action, then the work drawn big). Opening something
+// goes full-screen into its editor, whose toolbar starts with the way back.
 import { createContext, startTransition, useContext, useLayoutEffect, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
-import { ArrowLeft, FilmStrip, Flask, FrameCorners, House, MagnifyingGlass, Plus, Tray, Package } from "@phosphor-icons/react"
+import { ArrowLeft, DotsThree, FilmStrip, Flask, FrameCorners, House, MagnifyingGlass, Plus, SidebarSimple, Tray, Package } from "@phosphor-icons/react"
 import type { Icon } from "./ui"
 import { Logo, Popover, Tip, rove, useFlip } from "./ui"
 
@@ -19,7 +19,7 @@ export function BrandRow({ children }: { children?: ReactNode }) {
   return (
     <div className="flex h-12 shrink-0 items-center gap-2.5 pl-4 pr-2">
       <Logo size={20} />
-      <span className="truncate text-body font-semibold tracking-[-0.01em]">Video Engine</span>
+      <Wordmark className="truncate" />
       {children && <span className="ml-auto flex items-center gap-0.5">{children}</span>}
     </div>
   )
@@ -36,27 +36,22 @@ export const SPACES: { id: Space; name: string; icon: Icon }[] = [
   ...(import.meta.env.DEV ? [{ id: "lab" as const, name: "Lab", icon: Flask }] : []),
 ]
 
-// the mark's curve, and the easings it can become (ease-in-out, ease-out, ease-in, a spring that overshoots)
-const CURVES = ["M6.5 17C11.5 17 12.5 7 17.5 7", "M6.5 17C8 9 10 7 17.5 7", "M6.5 17C15 17 17 12 17.5 7", "M6.5 17C9 2 13 12 17.5 7"]
-
-/** The engine's mark, alive: its handles breathe under the pointer, and when it dances (`dance` changes) its curve runs
-    through the easings and settles back. */
+/** The engine's mark, alive: a dot on an ease-out arc and its two ghosts. Under the pointer the ghosts fall back
+    along the arc (the trail lengthens); when it dances (`dance` changes) the dot runs the arc again and lands. Still
+    under reduced motion. */
 export function LiveLogo({ size = 22, dance = 0 }: { size?: number; dance?: number }) {
-  const [at, setAt] = useState(0)
-  useEffect(() => {
-    if (!dance || matchMedia("(prefers-reduced-motion: reduce)").matches) return
-    const steps = [1, 2, 3, 1, 0]
-    const ts = steps.map((v, i) => setTimeout(() => setAt(v), 140 + i * 260))
-    return () => ts.forEach(clearTimeout)
-  }, [dance])
   return (
-    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden className={`live-logo shrink-0 ${dance ? "dancing" : ""}`} key={dance}>
-      <rect width="24" height="24" rx="6.5" fill="var(--fg)" />
-      <path d={CURVES[at]} fill="none" stroke="var(--surface)" strokeWidth="1.8" strokeLinecap="round" style={{ transition: "d 240ms cubic-bezier(0.34, 1.4, 0.64, 1)" }} />
-      <circle className="h1" cx="6.5" cy="17" r="1.9" fill="var(--surface)" />
-      <circle className="h2" cx="17.5" cy="7" r="1.9" fill="var(--surface)" />
+    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden className={`live-logo shrink-0 text-fg ${dance ? "dancing" : ""}`} key={dance}>
+      <circle className="g2" cx="5" cy="18" r="2.1" fill="currentColor" opacity=".3" />
+      <circle className="g1" cx="9.8" cy="13.6" r="3" fill="currentColor" opacity=".58" />
+      <circle className="dot" cx="16.4" cy="8.6" r="4.6" fill="currentColor" />
     </svg>
   )
+}
+
+/** The wordmark beside the mark. */
+export function Wordmark({ className = "" }: { className?: string }) {
+  return <span className={`text-[14.5px] font-semibold tracking-[-0.025em] ${className}`}>Video Engine</span>
 }
 
 /** A pill that slides to the element marked by `selector` inside `box`, re-measured when `key` or the box changes. */
@@ -81,33 +76,63 @@ function useGlide(box: React.RefObject<HTMLElement | null>, selector: string, ke
   return g
 }
 
-/** The island: the app's navigation, floating at the bottom of the window. The mark (home; five quick clicks throw a
-    party), the places with their names and a lit pill that springs to where you are, then find, what's waiting, New
-    (its menu opens upward) and you. */
-export function Island({ at, go, onSearch, review, newMenu, me, onLogo, dance }: { at: Space; go: (s: Space) => void; onSearch: () => void; /** what's waiting for a verdict (the Lab's, so only on this machine) */ review?: { count: number; open: boolean; toggle: () => void }; newMenu: ReactNode; /** the avatar and its menu */ me: ReactNode; /** five quick clicks on the mark */ onLogo?: () => void; dance?: number }) {
-  const box = useRef<HTMLElement>(null)
+/** One recent thing in the sidebar: its still, its name, a click opens it. */
+export type RecentItem = { id: string; name: string; thumb?: string; onOpen: () => void }
+
+/** The sidebar: the app's navigation, on the ground beside the page. The mark (home; five quick clicks throw a
+    party), New (everything that can be started), Search, then the places with a raised card that glides to where you
+    are, what you opened lately, and you. Collapsed it keeps only glyphs, each naming itself on hover; the mark turns
+    into the way to open it again. */
+export function Sidebar({ at, go, onSearch, review, newMenu, meMenu, recent = [], collapsed, onCollapse, onLogo, dance }: { at: Space; go: (s: Space) => void; onSearch: () => void; /** what's waiting for a verdict (the Lab's, so only on this machine) */ review?: { count: number; open: boolean; toggle: () => void }; newMenu: ReactNode; /** your menu: the theme, tips, shortcuts */ meMenu: ReactNode; recent?: RecentItem[]; collapsed: boolean; onCollapse: (c: boolean) => void; /** five quick clicks on the mark */ onLogo?: () => void; dance?: number }) {
+  const list = useRef<HTMLElement>(null)
   // the place you pressed lights at once; the page follows (it renders after the light has moved, see go below)
   const [want, setWant] = useState<Space | null>(null)
   useEffect(() => setWant(null), [at])
   const here = want ?? at
-  const pill = useGlide(box, '.island-item[aria-current="page"]', here)
-  const pillEl = useRef<HTMLSpanElement>(null)
-  useFlip(pillEl, pill && { x: pill.x, w: pill.w })
+  const [g, setG] = useState<{ y: number; h: number } | null>(null)
+  useLayoutEffect(() => {
+    const el = list.current
+    if (!el) return
+    const place = () => {
+      const on = el.querySelector<HTMLElement>('.nav-item[aria-current="page"]')
+      if (!on) return setG(null)
+      const a = el.getBoundingClientRect()
+      const b = on.getBoundingClientRect()
+      setG((p) => (p && p.y === b.top - a.top && p.h === b.height ? p : { y: b.top - a.top, h: b.height }))
+    }
+    place()
+    const ro = new ResizeObserver(place)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [here, collapsed])
+  const glide = useRef<HTMLSpanElement>(null)
+  useFlip(glide, g && { y: g.y, h: g.h })
   const goTo = (s: Space) => {
     if (s === here) return
     setWant(s)
     startTransition(() => go(s))
   }
   const clicks = useRef<number[]>([])
+  const [newOpen, setNewOpen] = useState(false)
+  // collapsed, each glyph names itself on hover; open, the names are there
+  const tip = (label: string, node: ReactNode, kbd?: string) =>
+    collapsed ? (
+      <Tip label={label} kbd={kbd} side="right">
+        {node}
+      </Tip>
+    ) : (
+      node
+    )
   return (
-    <div className="island-wrap">
-      <nav ref={box} aria-label="Places" className="island">
-        {pill && <span ref={pillEl} aria-hidden className="island-pill" style={{ transform: `translateX(${pill.x}px)`, width: pill.w }} />}
-        <Tip label="Video Engine" side="top">
+    <aside className="sidebar" data-collapsed={collapsed} aria-label="Video Engine">
+      <div className="side-top">
+        {tip(
+          collapsed ? "Open the sidebar" : "Home",
           <button
             type="button"
-            aria-label="Video Engine"
+            aria-label={collapsed ? "Open the sidebar" : "Video Engine, home"}
             onClick={() => {
+              if (collapsed) return onCollapse(false)
               const now = performance.now()
               clicks.current = [...clicks.current.filter((t) => now - t < 1600), now]
               if (clicks.current.length >= 5) {
@@ -115,69 +140,138 @@ export function Island({ at, go, onSearch, review, newMenu, me, onLogo, dance }:
                 onLogo?.()
               } else goTo("home")
             }}
-            className="island-icon"
+            className="group/logo relative grid h-8 w-8 shrink-0 place-items-center rounded-[9px] transition-colors duration-150 hover:bg-[var(--nav-hover)]"
           >
-            <LiveLogo size={24} dance={dance} />
-          </button>
-        </Tip>
-        <span aria-hidden className="island-sep" />
-        {SPACES.map((s) => (
-          <button key={s.id} type="button" aria-current={s.id === here ? "page" : undefined} aria-label={s.name} onPointerDown={(e) => e.button === 0 && goTo(s.id)} onClick={() => goTo(s.id)} className="island-item">
-            <s.icon aria-hidden />
-            <span className="label">{s.name}</span>
-            {s.id === "lab" && review && review.count > 0 && <span className="island-badge">{review.count}</span>}
-          </button>
-        ))}
-        <span aria-hidden className="island-sep" />
-        <Tip label="Find anything" kbd="Ctrl K" side="top">
-          <button type="button" aria-label="Find anything" onClick={onSearch} className="island-icon">
-            <MagnifyingGlass aria-hidden />
-          </button>
-        </Tip>
-        {review && (
-          <Tip label={review.count ? `${review.count} to review` : "Nothing to review"} side="top">
-            <button type="button" aria-label="To review" aria-expanded={review.open} onClick={review.toggle} className="island-icon">
-              <Tray aria-hidden />
-              {review.count > 0 && <span aria-hidden className="island-dot" />}
+            <span className={collapsed ? "transition-opacity duration-150 group-hover/logo:opacity-0" : ""}>
+              <LiveLogo size={24} dance={dance} />
+            </span>
+            {collapsed && <SidebarSimple aria-hidden size={18} className="absolute text-fg-2 opacity-0 transition-opacity duration-150 group-hover/logo:opacity-100" />}
+          </button>,
+        )}
+        <Wordmark className="side-label" />
+        <span className="side-hide ml-auto">
+          <Tip label="Close the sidebar" kbd={"Ctrl \\"} side="bottom">
+            <button type="button" aria-label="Close the sidebar" onClick={() => onCollapse(true)} className="grid h-8 w-8 place-items-center rounded-[9px] text-fg-3 transition-colors duration-150 hover:bg-[var(--nav-hover)] hover:text-fg">
+              <SidebarSimple size={18} aria-hidden />
             </button>
           </Tip>
-        )}
-        <button type="button" popoverTarget="island-new" className="island-new ml-1">
+        </span>
+      </div>
+
+      {tip(
+        "New",
+        <button type="button" popoverTarget="side-new" aria-expanded={newOpen} className="nav-new">
           <Plus aria-hidden weight="bold" />
-          New
-        </button>
-        <Popover id="island-new" side="top" align="end" label="New">
-          {newMenu}
-        </Popover>
-        <span className="grid h-11 w-11 place-items-center">{me}</span>
+          <span className="side-label">New</span>
+        </button>,
+      )}
+      <Popover id="side-new" side="right" align="start" label="New" onToggle={setNewOpen}>
+        {newMenu}
+      </Popover>
+      <div className="mt-1.5 flex flex-col gap-px">
+        {tip(
+          "Search",
+          <button type="button" onClick={onSearch} className="nav-item">
+            <MagnifyingGlass aria-hidden />
+            <span className="side-label">Search</span>
+            <span className="kbd-hint side-hide">Ctrl K</span>
+          </button>,
+          "Ctrl K",
+        )}
+        {review &&
+          tip(
+            review.count ? `${review.count} to review` : "Inbox",
+            <button type="button" aria-expanded={review.open} onClick={review.toggle} className="nav-item">
+              <Tray aria-hidden />
+              <span className="side-label">Inbox</span>
+              {review.count > 0 && <span className="nav-count">{review.count}</span>}
+            </button>,
+          )}
+      </div>
+
+      <p className="side-head" aria-hidden>
+        Places
+      </p>
+      <nav ref={list} aria-label="Places" className="nav-list">
+        {g && <span ref={glide} aria-hidden className="nav-glide" style={{ transform: `translateY(${g.y}px)`, height: g.h }} />}
+        {SPACES.map((s) => (
+          <span key={s.id} className="contents">
+            {tip(
+              s.name,
+              <button type="button" aria-current={s.id === here ? "page" : undefined} onPointerDown={(e) => e.button === 0 && goTo(s.id)} onClick={() => goTo(s.id)} className="nav-item">
+                <s.icon aria-hidden />
+                <span className="side-label">{s.name}</span>
+                {s.id === "lab" && review && review.count > 0 && <span className="nav-count">{review.count}</span>}
+              </button>,
+            )}
+          </span>
+        ))}
       </nav>
-    </div>
+
+      {recent.length > 0 && (
+        <>
+          <p className="side-head side-hide" aria-hidden>
+            Recent
+          </p>
+          <ul aria-label="Recent" className="side-hide scroll-thin -mr-1 min-h-0 flex-1 overflow-y-auto pr-1">
+            {recent.map((r) => (
+              <li key={r.id}>
+                <button type="button" onClick={r.onOpen} className="nav-recent">
+                  {r.thumb ? <img src={r.thumb} alt="" loading="lazy" decoding="async" onError={(e) => (e.currentTarget.style.visibility = "hidden")} /> : <span className="thumb" />}
+                  <span className="truncate">{r.name}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      <div className="mt-auto pt-2">
+        {tip(
+          "You",
+          <button type="button" popoverTarget="side-me" className="nav-item !h-11">
+            <span aria-hidden className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[12px] font-semibold text-white shadow-[0_0_0_1px_var(--line-strong)]" style={{ background: "conic-gradient(from 210deg at 35% 35%, var(--brand-1), var(--brand-2), var(--brand-3), var(--brand-1))" }}>
+              S
+            </span>
+            <span className="side-label min-w-0 flex-1">
+              <span className="block truncate text-[13px] text-fg">Syed</span>
+              <span className="block truncate text-[11.5px] font-normal text-fg-3">Settings and shortcuts</span>
+            </span>
+            <DotsThree aria-hidden size={16} className="side-hide shrink-0 text-fg-3" />
+          </button>,
+        )}
+        <Popover id="side-me" side="right" align="end" label="You">
+          {meMenu}
+        </Popover>
+      </div>
+    </aside>
   )
 }
 
-/** The way back out of an editor, carried by its dock: the place it opened from. Empty (no button) off a desktop. */
+/** The way back out of an editor: the place it opened from. Empty (no button) off a desktop. */
 export const Back = createContext<{ label: string; go: () => void } | null>(null)
-export function DockBack({ alone }: { /** the only thing on its dock: no divider after it */ alone?: boolean }) {
+/** The way back out of an editor, first in its toolbar: the place it opened from. */
+export function BarBack() {
   const b = useContext(Back)
   if (!b) return null
   return (
     <>
-      <Tip label={`Back to ${b.label}`} kbd="Esc" side="top">
-        <button type="button" onClick={b.go} className="dock-back">
+      <Tip label={`Back to ${b.label}`}>
+        <button type="button" onClick={b.go} className="bar-back">
           <ArrowLeft aria-hidden />
           {b.label}
         </button>
       </Tip>
-      {!alone && <span aria-hidden className="dock-sep" />}
+      <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-line-strong" />
     </>
   )
 }
 
-/** A page above the island: the soft light from above, a centred column, room at the foot for the island. */
+/** A page beside the sidebar: the soft light from above, a centred column, room at the foot for the island. */
 export function Page({ children, label }: { children: ReactNode; label: string }) {
   return (
     <main aria-label={label} className="page-ground scroll-thin min-w-0 flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-[1280px] px-6 pb-36 pt-12 lg:px-10 lg:pt-16">{children}</div>
+      <div className="mx-auto w-full max-w-[1200px] px-6 pb-24 pt-10 lg:px-12 lg:pt-14">{children}</div>
     </main>
   )
 }
@@ -203,7 +297,7 @@ export function PageSection({ title, count, aside, icon: I, children, className 
       <div className="mb-5 flex min-h-9 flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <h2 className="flex items-center gap-2.5 text-section font-semibold tracking-[-0.02em]">
           {I && (
-            <span aria-hidden className="grid h-8 w-8 place-items-center rounded-[10px] bg-surface-2 text-fg-2 shadow-[inset_0_0_0_1px_var(--line)]">
+            <span aria-hidden className="grid h-8 w-8 place-items-center rounded-[10px] bg-surface-2 text-fg-2">
               <I size={17} />
             </span>
           )}

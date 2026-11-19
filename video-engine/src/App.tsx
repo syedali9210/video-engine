@@ -1,10 +1,10 @@
 import { Suspense, lazy, startTransition, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { DialogHead } from "./Gloss";
-import { ArrowArcLeft, ArrowArcRight, BookOpen, ChatCircle, ClockCounterClockwise, Package, PencilSimpleLine, CaretUp, CaretDown, Cube, FrameCorners, FilmSlate, FilmStrip, PaintBrush, Tray, Sparkle, ArrowsClockwise, DotsThree, Flask, DownloadSimple, ImageSquare, Keyboard, Question, CornersOut, CornersIn, Moon, PaintBucket, SidebarSimple, SlidersHorizontal, Stack, Sun, X, ListChecks, Microphone } from "@phosphor-icons/react";
+import { ArrowArcLeft, ArrowArcRight, ArrowLeft, BookOpen, ChatCircle, ClockCounterClockwise, Package, PencilSimpleLine, CaretUp, CaretDown, Cube, FrameCorners, FilmSlate, FilmStrip, PaintBrush, Tray, Sparkle, ArrowsClockwise, DotsThree, Flask, DownloadSimple, ImageSquare, Keyboard, Question, CornersOut, CornersIn, Moon, PaintBucket, SidebarSimple, SlidersHorizontal, Stack, Sun, X, ListChecks, Microphone } from "@phosphor-icons/react";
 import { ANIMS, byId, htmlUrl, withDefaults, type AnimMeta, type Values } from "./registry";
 import { DEVICES, type Device, type DeviceId, type Posture } from "./devices";
 import Inspector from "./Inspector";
-import { Button, Dialog, IconButton, Kbd, MenuItem, Popover, Segmented, Sheet, Switch, useMedia } from "./ui";
+import { Button, Dialog, IconButton, Kbd, MenuItem, Popover, Segmented, Sheet, Switch, Tip, useMedia } from "./ui";
 import { FpsMeter } from "./studio/FpsMeter";
 import { VoicePanel } from "./studio/VoicePanel";
 import { Versions, keepHistory, keptHistory } from "./studio/Versions";
@@ -19,7 +19,9 @@ import { reframe, type Focus } from "./studio/formats";
 import FOCUS from "./studio/lib/focus.json";
 import { ProductPage } from "./Product";
 import { kitCopy, type ProductKit } from "./studio/product";
-import { Back, DockBack, InBar, Island, SPACES as PLACES, type Space } from "./shell";
+import { Back, BarBack, InBar, Sidebar, SPACES as PLACES, type Space } from "./shell";
+import { RenderCard } from "./RenderCard";
+import { Loading } from "./Thinking";
 import { CreativesPage, FilmsPage } from "./Galleries";
 import { barrelRoll, burstAt, rain, useKonami } from "./fun";
 import { Home } from "./Home";
@@ -341,6 +343,11 @@ export default function App() {
   const roomy = useMedia("(min-width: 1280px)");
   const [leftPanel, setLeftPanel] = useState<boolean | null>(null);
   const studioLeft = leftPanel ?? roomy;
+  // the sidebar: open or folded to its glyphs (null until you choose: then it follows the room and the place)
+  const [sideCollapsed, setSideCollapsed] = useState<boolean | null>(() => store.get<boolean | null>("side", null));
+  useEffect(() => {
+    if (sideCollapsed != null) store.set("side", sideCollapsed);
+  }, [sideCollapsed]);
   // focus: both side panels away, the stage as big as the window allows (Ctrl . toggles it)
   const [focus, setFocus] = useState(false);
   useEffect(() => {
@@ -348,6 +355,10 @@ export default function App() {
       if ((e.ctrlKey || e.metaKey) && e.key === ".") {
         e.preventDefault();
         setFocus((f) => !f);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "\\") {
+        e.preventDefault();
+        setSideCollapsed((c) => !(c ?? false));
       }
     };
     addEventListener("keydown", k);
@@ -385,16 +396,16 @@ export default function App() {
     return () => clearTimeout(t);
   }, [undo]);
   useEffect(() => {
-    document.title = `${canvasOn ? "Canvas" : "Films"} · Video Engine`;
-  }, [canvasOn]);
+    document.title = `${space === "work" ? (canvasOn ? "Canvas" : "Studio") : (SPACES.find((x) => x.id === space)?.name ?? "Home")} · Video Engine`;
+  }, [canvasOn, space]);
   // a studio export says how it went even after its popover has closed
   const xs = exporter.state;
   useEffect(() => {
     if (xs.phase === "done") {
-      say(`Downloaded ${xs.file}`);
-      burstAt(document.querySelector('[popovertarget="export-pop"]'), { count: 54 });
+      // the render card says it; the first one done also ticks the guide's last step on Home
+      store.set("exported", true);
+      burstAt(document.querySelector(".render-card") ?? document.querySelector('[popovertarget="export-pop"]'), { count: 54 });
     }
-    else if (xs.phase === "error") say(xs.message);
   }, [xs]);
   // what a toast says stays a moment, then clears (the live region announces it once)
   useEffect(() => {
@@ -726,7 +737,10 @@ export default function App() {
     },
   };
   const slug = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "scene";
+  const lastExport = useRef<{ kind: ExportKind; draft: boolean }>({ kind: "video", draft: false });
+  const [cardGone, setCardGone] = useState<unknown>(null);
   const exportComp = (kind: ExportKind, draft = false) => {
+    lastExport.current = { kind, draft };
     const size = SIZES.find((x) => x.id === comp.size) ?? SIZES[0];
     // a draft: half the size (still even: H.264 takes no odd sides), 30 fps, no motion blur, a fast encode
     return exporter.run(kind, async () => (draft ? { ...(await renderConfig(kind, { ...studioComp, blur: undefined })) } : renderConfig(kind)), draft ? { w: Math.round(size.w / 4) * 2, h: Math.round(size.h / 4) * 2 } : size, draft ? 30 : comp.fps, `${anim.id}-${kind === "png" ? slug(cscene.name) : "film"}${draft ? "-draft" : ""}`, draft);
@@ -1031,6 +1045,8 @@ export default function App() {
     return { id: await submitJob("video", await renderConfig("video", c), SIZES.find((x) => x.id === size) ?? SIZES[0], c.fps), kept };
   };
   const applyTemplate = async (t: Template, kit?: ProductKit, written?: Record<string, string>) => {
+    // the guide on Home ticks "Make your first film" once one is made
+    store.set("made", true);
     const old = comp;
     setTemplates(false);
     const { made, film } = await fromTemplate(t, kit, written);
@@ -1192,15 +1208,7 @@ export default function App() {
   const studioStage = studio && (
     <Suspense
       fallback={
-        <div className="relative grid min-h-0 flex-1 place-items-center">
-          <Spinner size={22} />
-          {/* the way back works while the stage loads */}
-          <div className="absolute inset-x-0 bottom-2 flex justify-center">
-            <div className="dock">
-              <DockBack alone />
-            </div>
-          </div>
-        </div>
+        <Loading label="Setting up the Studio: the stage, the lights, your devices" />
       }
     >
       <StudioStage
@@ -1292,6 +1300,7 @@ export default function App() {
         onClose={() => setTemplates(false)}
         onPick={(t) => void applyTemplate(t)}
         accent={accents[0] ?? comp.brand?.accent}
+        product={comp.brand?.name || anim.brand || anim.name}
         onArtist={() => {
           setTemplates(false);
           setArtistOpen(true);
@@ -1403,13 +1412,27 @@ export default function App() {
           </div>
         </div>
       )}
-      <div aria-live="polite" className={`pointer-events-none fixed inset-x-0 z-[80] flex justify-center px-4 ${phone ? "top-[calc(env(safe-area-inset-top)+68px)]" : "bottom-[calc(env(safe-area-inset-bottom)+88px)]"}`}>
+      <div aria-live="polite" className={`pointer-events-none fixed inset-x-0 z-[80] flex justify-center px-4 ${phone ? "top-[calc(env(safe-area-inset-top)+68px)]" : space === "work" ? "bottom-[calc(env(safe-area-inset-bottom)+88px)]" : "bottom-6"}`}>
         {said && (
-          <p key={said} className="pop-in btn-ink rounded-full px-4 py-2 text-caption font-medium">
+          <p key={said} className="toast pop-in">
+            <span aria-hidden className="toast-icon">
+              <Sparkle size={13} />
+            </span>
             {said}
           </p>
         )}
       </div>
+      {exporter.state !== cardGone && (
+        <RenderCard
+          state={exporter.state}
+          onClose={() => setCardGone(exporter.state)}
+          onRetry={() => void exportComp(lastExport.current.kind, lastExport.current.draft)}
+          onOptions={() => {
+            if (space !== "work" || canvasOn) edit("films");
+            setTimeout(() => document.getElementById("export-pop")?.showPopover(), space === "work" && !canvasOn ? 0 : 450);
+          }}
+        />
+      )}
       {LAB && !labOpen && (
         <LabNotice
           state={lab.state}
@@ -1453,28 +1476,23 @@ export default function App() {
       setCanvas(to === "creatives");
     });
   const labBadge = (lab.state?.pending ?? 0) + (lab.state?.films ?? 0);
-  // + in the rail: everything that can be started, from anywhere
+  // New, in the sidebar: everything that can be started, from anywhere, each with the colour of what it makes
   const newMenu = (
-    <div className="w-[288px] p-1.5">
-      <p className="px-2.5 pb-1 pt-1.5 text-micro font-medium uppercase tracking-[0.06em] text-fg-3">Make</p>
+    <div className="w-[300px] p-1.5">
+      <p className="px-2.5 pb-1 pt-1.5 text-micro font-medium text-fg-3">Start something</p>
       <MenuItem
         icon={PaintBrush}
         tone="var(--k-motion)"
-        hint="The Artist directs it from your product."
+        hint="The Artist directs a whole film from your product."
         onSelect={() => {
           edit("films");
           setArtistOpen(true);
         }}
       >
-        A launch film
+        Direct a film
       </MenuItem>
-      <MenuItem
-        icon={FilmSlate}
-        tone="var(--k-scene)"
-        hint="By kind: launch, feature, demo, teaser…"
-        onSelect={() => go("films")}
-      >
-        A film from a template
+      <MenuItem icon={FilmSlate} tone="var(--k-scene)" hint="Launch, feature, demo, brand, social." onSelect={() => go("films")}>
+        Film from a template
       </MenuItem>
       <MenuItem
         icon={FrameCorners}
@@ -1485,11 +1503,14 @@ export default function App() {
           edit("creatives");
         }}
       >
-        A creative
+        Creative
       </MenuItem>
       {LAB && (
         <>
           <div className="mx-2 my-1 border-t" />
+          <MenuItem icon={Package} tone="var(--k-device)" hint="Screens, logo and words, once for every film." onSelect={() => go("product")}>
+            Add your product
+          </MenuItem>
           <MenuItem icon={FilmStrip} hint="Four new films to keep or pass, with why." onSelect={() => setReviewOpen(true)}>
             Films to review
           </MenuItem>
@@ -1497,59 +1518,73 @@ export default function App() {
       )}
     </div>
   );
-  // you: the avatar's menu (the theme, tips, shortcuts, the lab's settings)
-  const me = (
-    <>
-      <button type="button" popoverTarget="me-menu" aria-label="You" className="press ml-1 h-7 w-7 shrink-0 rounded-full shadow-[0_0_0_1px_var(--line-strong)] transition-transform duration-150 hover:scale-105" style={{ background: "conic-gradient(from 210deg at 35% 35%, var(--brand-1), var(--brand-2), var(--brand-3), var(--brand-1))" }} />
-      <Popover id="me-menu" align="end" label="You">
-        <div className="w-[260px] p-1.5">
-          <div className="px-2.5 pb-2.5 pt-2">
-            <p className="text-body font-medium">Syed</p>
-            <p className="text-caption text-fg-3">Video Engine</p>
-          </div>
-          <div className="mx-1 mb-1 flex items-center justify-between rounded-lg px-1.5 py-1">
-            <span className="text-body text-fg-2">Theme</span>
-            <Segmented
-              size="sm"
-              label="Theme"
-              value={themePick}
-              onChange={(v) => pickTheme(v as "light" | "dark" | "auto")}
-              options={[
-                { value: "light", label: "Light" },
-                { value: "dark", label: "Dark" },
-                { value: "auto", label: "Auto" },
-              ]}
-            />
-          </div>
-          <div className="mx-1 flex items-center justify-between rounded-lg px-1.5 py-1.5">
-            <label htmlFor="me-tips" className="text-body text-fg-2">
-              Show tips
-            </label>
-            <Switch id="me-tips" on={tips} onChange={setTips} />
-          </div>
-          <div className="mx-2 my-1.5 border-t" />
-          <MenuItem icon={Keyboard} onSelect={() => setHelp(true)}>
-            Keyboard shortcuts
-          </MenuItem>
-          {LAB && (
-            <MenuItem icon={Flask} onSelect={() => openLab("settings")}>
-              Lab settings
-            </MenuItem>
-          )}
-        </div>
-      </Popover>
-    </>
+  // you: the theme, tips, shortcuts, the lab's settings
+  const meMenu = (
+    <div className="w-[268px] p-1.5">
+      <div className="flex items-center gap-2.5 px-2.5 pb-2.5 pt-2">
+        <span aria-hidden className="grid h-8 w-8 place-items-center rounded-full text-[13px] font-semibold text-white" style={{ background: "conic-gradient(from 210deg at 35% 35%, var(--brand-1), var(--brand-2), var(--brand-3), var(--brand-1))" }}>
+          S
+        </span>
+        <span>
+          <span className="block text-body font-medium">Syed</span>
+          <span className="block text-caption text-fg-3">Video Engine</span>
+        </span>
+      </div>
+      <div className="mx-1 mb-1 flex items-center justify-between rounded-lg px-1.5 py-1">
+        <span className="text-body text-fg-2">Theme</span>
+        <Segmented
+          size="sm"
+          label="Theme"
+          value={themePick}
+          onChange={(v) => pickTheme(v as "light" | "dark" | "auto")}
+          options={[
+            { value: "light", label: "Light" },
+            { value: "dark", label: "Dark" },
+            { value: "auto", label: "Auto" },
+          ]}
+        />
+      </div>
+      <div className="mx-1 flex items-center justify-between rounded-lg px-1.5 py-1.5">
+        <label htmlFor="me-tips" className="text-body text-fg-2">
+          Show tips in panels
+        </label>
+        <Switch id="me-tips" on={tips} onChange={setTips} />
+      </div>
+      <div className="mx-2 my-1.5 border-t" />
+      <MenuItem icon={Keyboard} onSelect={() => setHelp(true)}>
+        Keyboard shortcuts
+      </MenuItem>
+      {LAB && (
+        <MenuItem icon={Flask} onSelect={() => openLab("settings")}>
+          Lab settings
+        </MenuItem>
+      )}
+    </div>
   );
-  const island = <Island at={at} go={go} dance={dance} onLogo={party} onSearch={() => setPalette({ q: "" })} review={LAB ? { count: labBadge, open: reviewOpen, toggle: () => setReviewOpen((o) => !o) } : undefined} newMenu={newMenu} me={me} />;
+  // what you opened lately, in the sidebar: a click puts it on the devices and opens the Studio
+  const recentItems = recentAnims
+    .map((rid) => ANIMS.find((a) => a.id === rid))
+    .filter((a): a is AnimMeta => !!a)
+    .slice(0, 6)
+    .map((a) => ({ id: a.id, name: a.name, thumb: `/thumbs/${a.id}-${dark ? "dark" : "light"}.webp`, onOpen: () => (openAnim(a.id), edit("films")) }));
+  // the Lab has its own list of rooms down its side: the sidebar folds to its glyphs there unless you opened it
+  const folded = sideCollapsed ?? (space === "lab" || !roomy);
+  const sidebar = <Sidebar at={at} go={go} dance={dance} onLogo={party} onSearch={() => setPalette({ q: "" })} review={LAB ? { count: labBadge, open: reviewOpen, toggle: () => setReviewOpen((o) => !o) } : undefined} newMenu={newMenu} meMenu={meMenu} recent={recentItems} collapsed={folded} onCollapse={(c) => setSideCollapsed(c)} />;
   const back = space === "work" ? { label: SPACE_NAME[home], go: () => go(home) } : null;
-  // a page has the island floating over its foot; an editor has its way back on its own dock instead
+  // a page sits on a sheet beside the sidebar; an editor is full-screen, its way back first in its toolbar
   const withRail = (body: ReactNode) => (
     <InBar.Provider value>
       <Back.Provider value={back}>
         <OpenSettings.Provider value={LAB ? () => openLab("settings") : null}>
-          <div className="flex h-full min-h-0">{body}</div>
+          {space === "work" ? (
+            <div className="flex h-full min-h-0">{body}</div>
+          ) : (
+            <div className="app-frame">
+              {sidebar}
+              <div className="app-sheet">{body}</div>
+            </div>
+          )}
         </OpenSettings.Provider>
-        {space !== "work" && island}
       </Back.Provider>
     </InBar.Provider>
   );
@@ -1779,7 +1814,7 @@ export default function App() {
       onClick={() => pickAnim("Your product's screen", openAnim)}
       aria-haspopup="dialog"
       aria-label={`${anim.name} is on the devices. Choose another screen`}
-      className="press flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-body hover:bg-surface-2"
+      className="press flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-body hover:bg-hover"
     >
       <span className="truncate font-medium">{anim.name}</span>
       <CaretDown size={11} weight="bold" aria-hidden className="shrink-0 text-fg-3" />
@@ -1876,58 +1911,64 @@ export default function App() {
   // the layers beside the film, unless hidden or focused
   const sideShown = !focus && studioLeft;
   const desk = (
-    <div className="flex h-full min-w-0 flex-1">
+    <div className="flex h-full min-w-0 flex-1 flex-col bg-app">
       <a href="#inspector" className="skip-link">
         Skip to inspector
       </a>
-      {sideShown && <aside className="w-[248px] shrink-0 overflow-hidden border-r bg-surface">{layersPanel(undefined, false, rail ? null : appFoot)}</aside>}
-
-      <main aria-label="Stage" className="stage-ground relative flex min-w-0 flex-1 flex-col">
-        {/* the stage's toolbar: the panel toggle and where you are (left), what you can do with it (right) */}
-        <div className="@container relative z-30 grid h-11 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b bg-surface px-2">
-          <div className="flex h-10 min-w-0 items-center gap-0.5 justify-self-start">
-            {(
-              <IconButton label={sideShown ? "Hide the sidebar" : "Show the sidebar"} expanded={sideShown} onClick={() => (setFocus(false), setLeftPanel(!sideShown))}>
-                <SidebarSimple size={17} />
-              </IconButton>
-            )}
-            {!sideShown && crumbs}
-          </div>
-          {rail ? <span /> : viewSwitch}
-          <div className="flex min-w-0 items-center justify-end gap-1.5">
-            <>
-              <IconButton label="Undo" kbd={`${MOD} Z`} disabled={!past.current.length} onClick={undoStep}>
-                <ArrowArcLeft size={17} />
-              </IconButton>
-              <IconButton label="Redo" kbd={`${MOD} Shift Z`} disabled={!future.current.length} onClick={redoStep}>
-                <ArrowArcRight size={17} />
-              </IconButton>
-              <Versions comp={comp} onRestore={(c, name) => (setComp(() => c), setCsel({ scene: c.scenes[0].id }), say(`Back to “${name}” (Undo takes you back)`))} />
-              <NoteEdit
-                comp={comp}
-                onApply={(s, note) => {
-                  // compiled with each film's values as they are now: only what the note asked for changes
-                  const values = Object.fromEntries(comp.scenes.flatMap((sc) => sc.layers).flatMap((l) => (l.kind === "component" && l.values ? [[l.anim, l.values] as const] : [])));
-                  const made = compileScript(s, { device: shown, posture, anim: id, copy: copy ?? SAMPLE_COPY, brand: comp.brand, accent: accents[0] ?? comp.brand?.accent, values });
-                  setComp((c) => ({ ...c, scenes: made.scenes }));
-                  setCsel({ scene: made.scenes[0].id });
-                  say(`Changed: “${note}” (Undo takes it back)`);
-                }}
-              />
-            </>
-
-            <IconButton label={focus ? "Show the panels" : "Focus: hide the panels"} kbd="Ctrl ." active={focus} onClick={() => setFocus(!focus)} tipAlign="end">
-              {focus ? <CornersIn size={17} /> : <CornersOut size={17} />}
-            </IconButton>
-            {exportBtn}
-          </div>
+      {/* the editor's bar, full width on the ground: the way back and what's open (left), what you do with it (right) */}
+      <header className="editor-bar @container">
+        <div className="flex h-10 min-w-0 items-center gap-0.5 justify-self-start">
+          <BarBack />
+          <IconButton label={sideShown ? "Hide the panel" : "Show the panel"} expanded={sideShown} onClick={() => (setFocus(false), setLeftPanel(!sideShown))}>
+            <SidebarSimple size={17} />
+          </IconButton>
+          {crumbs}
         </div>
-        {surface}
-      </main>
-
-      {!focus && <Inspector title={inspectTitle} icon={inspectorIcon(comp, csel)}>
-        {studioInspector(false)}
-      </Inspector>}
+        {rail ? (
+          <span className="hidden truncate text-caption tabular-nums text-fg-3 @min-[52rem]:block">
+            {comp.scenes.length} {comp.scenes.length === 1 ? "scene" : "scenes"} · {total(comp).toFixed(1)} s · {comp.size.replace("x", ":")}
+          </span>
+        ) : (
+          viewSwitch
+        )}
+        <div className="flex min-w-0 items-center justify-end gap-1">
+          <IconButton label="Undo" kbd={`${MOD} Z`} disabled={!past.current.length} onClick={undoStep}>
+            <ArrowArcLeft size={17} />
+          </IconButton>
+          <IconButton label="Redo" kbd={`${MOD} Shift Z`} disabled={!future.current.length} onClick={redoStep}>
+            <ArrowArcRight size={17} />
+          </IconButton>
+          <Versions comp={comp} onRestore={(c, name) => (setComp(() => c), setCsel({ scene: c.scenes[0].id }), say(`Back to “${name}” (Undo takes you back)`))} />
+          <NoteEdit
+            comp={comp}
+            onApply={(s, note) => {
+              // compiled with each film's values as they are now: only what the note asked for changes
+              const values = Object.fromEntries(comp.scenes.flatMap((sc) => sc.layers).flatMap((l) => (l.kind === "component" && l.values ? [[l.anim, l.values] as const] : [])));
+              const made = compileScript(s, { device: shown, posture, anim: id, copy: copy ?? SAMPLE_COPY, brand: comp.brand, accent: accents[0] ?? comp.brand?.accent, values });
+              setComp((c) => ({ ...c, scenes: made.scenes }));
+              setCsel({ scene: made.scenes[0].id });
+              say(`Changed: “${note}” (Undo takes it back)`);
+            }}
+          />
+          <IconButton label={focus ? "Show the panels" : "Focus: hide the panels"} kbd="Ctrl ." active={focus} onClick={() => setFocus(!focus)} tipAlign="end">
+            {focus ? <CornersIn size={17} /> : <CornersOut size={17} />}
+          </IconButton>
+          <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-line-strong" />
+          {exportBtn}
+        </div>
+      </header>
+      {/* the panel, the stage and the inspector: three tones side by side, no rules between them */}
+      <div className="flex min-h-0 flex-1">
+        {sideShown && <aside className="flex w-[300px] shrink-0 overflow-hidden">{layersPanel(undefined, false, rail ? null : appFoot)}</aside>}
+        <main aria-label="Stage" className="stage-ground relative flex min-w-0 flex-1 flex-col">
+          {surface}
+        </main>
+        {!focus && (
+          <Inspector title={inspectTitle} icon={inspectorIcon(comp, csel)}>
+            {studioInspector(false)}
+          </Inspector>
+        )}
+      </div>
       {overlays}
     </div>
   );
@@ -1935,12 +1976,3 @@ export default function App() {
 }
 
 const SPACE_NAME = Object.fromEntries(PLACES.map((x) => [x.id, x.name])) as Record<Space, string>;
-
-function Spinner({ size }: { size: number }) {
-  return (
-    <svg viewBox="0 0 24 24" width={size} height={size} className="animate-spin text-fg-3 motion-reduce:animate-none" fill="none" stroke="currentColor" strokeWidth="2" role="img" aria-label="Loading">
-      <path d="M12 3a9 9 0 0 1 9 9" strokeLinecap="round" />
-      <circle cx="12" cy="12" r="9" opacity=".2" />
-    </svg>
-  );
-}
