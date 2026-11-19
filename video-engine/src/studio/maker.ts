@@ -386,6 +386,29 @@ export const CRITIC_SCHEMA = {
   },
 }
 
+/** The scorecard a directed film is read against (1 to 5 each), and what to tell the director when it falls short:
+    `notes` go into the next story call. */
+export const SCORE_SCHEMA = {
+  name: "scorecard",
+  schema: {
+    type: "object",
+    properties: {
+      say: { type: "string", description: "What you saw, one or two sentences." },
+      story: { type: "number", description: "1-5: after watching, could a stranger say what the product does and for whom?" },
+      product: { type: "number", description: "1-5: is the product itself on screen, working, for most of it?" },
+      look: { type: "number", description: "1-5: one world, one type, one grade: never a mix of clips." },
+      words: { type: "number", description: "1-5: every line big enough, on a calm ground, not cut off, plain." },
+      carriers: { type: "number", description: "1-5: the mark, the shapes and the screens each mean something where they are." },
+      shots: { type: "array", description: "Each still against what its shot is meant to do.", items: { type: "object", properties: { n: { type: "number", description: "The still's number." }, matches: { type: "boolean", description: "Does the picture actually show what the shot is meant to (its words, what it shows, the belief it buys)?" }, note: { type: "string", description: "If not, what's wrong and what would fix it; empty if it matches." } }, required: ["n", "matches", "note"] } },
+      notes: { type: "string", description: "What to change in the story, in plain words, for the director; empty if nothing." },
+    },
+    required: ["say", "story", "product", "look", "words", "carriers", "shots", "notes"],
+  },
+}
+export type Scorecard = { say: string; story: number; product: number; look: number; words: number; carriers: number; notes: string; shots?: { n: number; matches: boolean; note: string }[] }
+/** The weakest score on a card, and whether the film passes (every score 4 or more). */
+export const weakest = (s: Scorecard) => Math.min(s.story, s.product, s.look, s.words, s.carriers)
+
 /** Scene edits on a composition's scenes (lines, templates and sizes are the server's: they need the writer or the
     template's code). */
 export function applySceneOps<S extends { duration: number }>(scenes: S[], ops: Op[]): S[] {

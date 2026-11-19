@@ -8,7 +8,7 @@
 //
 //   claude mcp add animation-engine -- node "<engine folder>/mcp/server.mjs"
 //
-// Tools: make_video · make_film · edit_film · make_interactive · make_shader_video · list_shader_presets · job_status · list_templates · engine_status
+// Tools: make_video · make_film · direct_film · edit_film · make_interactive · make_shader_video · list_shader_presets · job_status · list_templates · engine_status
 // Env:   ENGINE_URL (http://localhost:5180) · STUDIO_CHROME (Chrome or Edge; found by itself otherwise)
 import { spawn, spawnSync } from "node:child_process"
 import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs"
@@ -757,6 +757,60 @@ ${made.spec.name} (${a.kind}${a.preset ? "" : ", made by the rules"}), ${width} 
         `Cost: ${tokens.toLocaleString()} tokens, made in ${Math.round((Date.now() - t0) / 1000)} s.${review}`,
         `edit_film with {"id": "${film.id}", "note": "…"} changes it.`,
       ].join("\n")
+    },
+  },
+  {
+    name: "direct_film",
+    title: "Direct a product film from a story",
+    description:
+      "Directs a launch film of a product from a story rather than a template: one AI call writes its spine (the hook in the audience's words, the product arriving as its liquid mark, three or four moments of the product working, each on the screen or recording that shows it, the payoff and the call), and the engine builds it in one world: a shader field under every shot, the liquid mark at the start and the end, shape gradients where they mean something, the product's screens on devices and its recordings on cards, a score cut to it. With `review` (the default) it renders stills, scores them (story, product, look, words, carriers) and directs it again with the critic's notes while a score is under 4. Works on a product kit (make_film makes one from a codebase).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        kit: str("The product kit's id."),
+        length: { type: "number", description: "Seconds (10 to 90, default 30)." },
+        style: { type: "string", enum: ["keynote", "pop", "editorial", "neon", "glass", "bold"], description: "The art direction (default: keynote on a dark brand, soft glass on a light one)." },
+        notes: str("What to say or stress, in plain words."),
+        review: { type: "boolean", description: "Score its stills and direct it again while a score is under 4 (default true)." },
+        render: { type: "string", enum: ["final", "draft", "none"], description: "What to render and save after (default final)." },
+        out: str("Where to save it."),
+      },
+      required: ["kit"],
+    },
+    async run(a, { progress, signal }) {
+      const t0 = Date.now()
+      await ensureEngine(progress)
+      const post = async (path, body) => {
+        const r = await fetch(`${ENGINE}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
+        const j = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(j.error || `${path}: ${r.status}`)
+        return j
+      }
+      progress("The story, then the world, then the scorecard", 10)
+      const r = await post("/__film/direct", { kit: a.kit, length: a.length, style: a.style, notes: a.notes, review: a.review !== false })
+      const film = r.film ?? r
+      const lines = [`Film ${film.id}: ${film.name}.`]
+      const spine = JSON.parse(film.versions.at(-1).values.spine)
+      lines.push(`Story: ${spine.beats.map((b) => `${b.act} “${b.say}”${b.sub ? ` / ${b.sub}` : ""} [${b.carrier}]`).join(" · ")}`)
+      for (const c of r.cards ?? []) lines.push(`Scorecard ${c.id}: story ${c.card.story}, product ${c.card.product}, look ${c.card.look}, words ${c.card.words}, carriers ${c.card.carriers}. ${c.card.say}`)
+      if (a.render !== "none") {
+        const { job } = await post("/__film/render", { id: film.id, draft: a.render === "draft" })
+        const end = Date.now() + 25 * 60_000
+        for (;;) {
+          if (signal?.aborted) throw new Error("Cancelled")
+          const s = await (await fetch(`${ENGINE}/__studio/jobs/${job}`)).json()
+          if (s.state === "error") throw new Error(`The render failed: ${s.error || "no reason given"}`)
+          if (s.state === "done") break
+          if (Date.now() > end) throw new Error(`Still rendering after 25 minutes: job ${job}.`)
+          progress(s.total > 1 ? `Rendering frame ${s.frame} of ${s.total}` : "Rendering", s.total > 1 ? 40 + (55 * s.frame) / s.total : 40)
+          await sleep(1500)
+        }
+        const file = await save(job, target(a.out, undefined, `${slug(film.name)}${a.render === "draft" ? "-draft" : ""}.mp4`))
+        lines.push(`Saved: ${file} (${mb(file)} MB)`)
+      }
+      const last = (await (await fetch(`${ENGINE}/__film/get?id=${film.id}`)).json()).log ?? film.log
+      lines.push(`Cost: ${last.reduce((n, s) => n + (s.tokens || 0), 0).toLocaleString()} tokens on this film, ${Math.round((Date.now() - t0) / 1000)} s.`)
+      return lines.join("\n")
     },
   },
   {

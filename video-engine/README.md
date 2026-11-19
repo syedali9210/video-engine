@@ -410,6 +410,70 @@ product's:
   Cast screens that fill the camera's path: Glide's macro crosses the screen's middle and bottom, so a screen with an
   empty canvas there films as a white blur.
 
+**Directed films** (*Direct a film*, `POST /__film/direct`, the MCP's `direct_film`). These start from a story, not a
+template (`src/studio/screenplay.ts`):
+
+1. **The spine, one call.** The writer gets the brief and what can carry each beat: the line alone, the liquid mark,
+   each of the product's screens and recordings as the reader saw them, and the shape metaphors. It returns four acts:
+   - the hook: the pain, in the audience's words
+   - the turn: the product arriving as its mark
+   - the show: three or four moments of the product working, each an action and what you get, on the screen or
+     recording that shows it
+   - the payoff: the promise again, then the mark and the call
+
+   Code holds it to the rules: lines of at most 7 words, each screen used once, the mark exactly twice, the length.
+2. **One world.** A shader field in the brand's colours runs under every shot. Exports seek every video to the film's
+   clock, so it flows through the cuts. The liquid mark is cut from the logo's own lines and screen-blended over the
+   world. Shapes stand for ideas (a fanning stack: every format). Screens go on 3D devices, and recordings go on cards,
+   placed so they start on the action when their shot starts. The art direction (the Artist's) sets the type, the
+   entrances, the tempo every beat is cut on, and the cuts between acts. A score is cut to it.
+3. **The scorecard** (`POST /__film/review`, or `review: true`). Stills of every shot are scored 1–5 on story,
+   product, look, words and carriers. While a score is under 4, the critic's notes go into the next story call (two
+   rounds at most), and the best film is kept.
+4. **Recordings of the product** come from the kit's tours (`POST /__kit/tour`): the running app driven through a flow
+   with real clicks and a drawn cursor, filmed at 2×.
+
+**motionmaxxing** (Tejas Makwana's skill, Apache-2.0, vendored whole in `public/motionmaxxing` with its LICENSE and
+NOTICE, its bundled GSAP 3.12.5 under GreenSock's own license; only `docs/media` left out). The director follows its
+rules, measured on 53 frame-accurate professional films:
+- every beat buys one belief, in four roles (hook, turn, proof, cta)
+- proofs are a claim in type, then a hard cut to the product performing it, big, with nothing over it
+- cuts are hard and on motion, and almost nothing fades
+- the mark crashes in from oversize
+- the end card is the name alone, at most a quarter of the film, holding at most 1.4 s
+- no page chrome, no slogans
+
+Its runtime plays inside the renderer: a motion.js film (`window.__seek`) is a library animation with
+`public/motionmaxxing-driver.js`, which seeks it every frame from the page's clock. So the export's stepped clock
+renders it frame for frame; *Motion runtime demo* is its own demo film.
+
+**The generator** (`server/generate.ts`, `GET /__film/assets`, `POST /__film/asset { kit, kind, id? }`) makes, for the
+product's brand:
+- the world: a grainy shader field
+- the mark: the logo's own lines, picked out of its tile, in liquid metal
+- six shapes that each stand for one idea: formats (fanning slabs), layers (glass discs), outputs (tiles), steps
+  (pills), core (an orb), loop (a ring)
+
+The director is offered all of them, and only the ones a beat uses are rendered (about a minute each the first time,
+then kept).
+
+**Meaning:** every shot keeps what it's for (`scene.meaning`: its role, the belief it buys, its words, what carries
+it, what it shows). A directed film writes it from its spine. A template film takes its shot's role and its job from
+the template's contract.
+
+**The cross-checker** (`src/studio/crosscheck.ts`, and `POST /__film/review`) runs two passes:
+1. **Code, free:** motionmaxxing's gates on the composition. These are the end card (G3), page chrome and addresses in
+   the close (G5), a title over the product (deck layout), the product too small to read (G1), fades between beats,
+   slogan copy, pinned objects, and shots that buy nothing.
+2. **A look:** one still a shot, each checked against what it's meant to show, and the film scored.
+
+Failed gates and shots off their meaning become the director's notes, and with `review: true` it directs again (two
+rounds at most).
+
+**Quick look:** *Quick look* (`POST /__film/render { stills: true }`) renders two frames a second at a quarter size.
+That's every shot of a 30 s film in under a minute, where a draft takes about two. The kit reader now reads eight
+pictures a call instead of one, and a cut-off AI reply is asked again with more room and never cached.
+
 Every step is logged with its time and tokens (`.engine-data/films/runs.jsonl`, and on each film). Measured on the
 engine's own kit: the brief 1.4k tokens, a film's lines 1.0–1.7k (answers are cached: the same request again costs
 nothing), the critic about 6.6k (optional), reading the kit's 9 pictures 11.6k once; a film's words in about a

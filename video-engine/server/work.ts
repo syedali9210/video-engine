@@ -157,7 +157,8 @@ export async function run(o: { job: Job; messages: Msg[]; schema?: { name: strin
     try {
       // the last one asked gets the usual second try when it's busy; before that, the next provider is the second try
       // (a model with another to fall back on is asked once, without the usual waits and retries)
-      const ask1 = (model: string, last: boolean) => chat({ model, messages: o.messages, schema: o.schema, maxTokens: Math.min(o.maxTokens ?? p.out, p.out), temperature: o.temperature, via: via(p, s), once: !last || i < ask.length - 1, timeoutMs: last ? 120000 : 60000 })
+      const room = Math.min(o.maxTokens ?? p.out, p.out)
+      const ask1 = (model: string, last: boolean, max = room) => chat({ model, messages: o.messages, schema: o.schema, maxTokens: max, temperature: o.temperature, via: via(p, s), once: !last || i < ask.length - 1, timeoutMs: last ? 120000 : 60000 })
       // a model picked in Settings that can't take this kind of request (one that only answers another API, or has no
       // eyes or system prompt) hands it to the provider's own default model, rather than failing every job
       // (and one that's overloaded, a 503, hands it to the next of the provider's own models)
@@ -167,6 +168,8 @@ export async function run(o: { job: Job; messages: Msg[]; schema?: { name: strin
       for (const [k, m] of models.entries()) {
         try {
           r = await ask1(m, k === models.length - 1)
+          // a JSON answer cut off (a thinking model can spend its room thinking): asked once more with all the room
+          if (r.finish === "length" && o.schema && room < p.out) r = await ask1(m, k === models.length - 1, p.out)
           break
         } catch (e) {
           const msg = (e as Error).message
@@ -180,7 +183,8 @@ export async function run(o: { job: Job; messages: Msg[]; schema?: { name: strin
       if (!r.text.trim()) throw new Error(r.finish === "length" ? "its reply ran out of room before it said anything" : "an empty reply")
       count(id, r.usage)
       const out = { text: r.text, provider: id, model: r.model, finish: r.finish }
-      write(cache, out)
+      // (a reply cut off isn't kept: asking again should get a whole one, not this)
+      if (r.finish !== "length") write(cache, out)
       log({ at: new Date().toISOString(), job: o.job, ok: true, provider: id, model: r.model, ms: Date.now() - t0, tokens: (r.usage?.prompt_tokens ?? 0) + (r.usage?.completion_tokens ?? 0), tried })
       return { ...out, cached: false, tried, tokens: { in: r.usage?.prompt_tokens ?? 0, out: r.usage?.completion_tokens ?? 0 } }
     } catch (e) {

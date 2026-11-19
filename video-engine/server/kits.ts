@@ -128,6 +128,16 @@ const READ_SCHEMA = {
     required: ["kind", "shows", "text", "focus", "crop"],
   },
 }
+const READ_MANY = {
+  name: "pictures",
+  schema: { type: "object", properties: { pictures: { type: "array", items: { ...READ_SCHEMA.schema, properties: { n: { type: "number", description: "The picture's number." }, ...READ_SCHEMA.schema.properties }, required: ["n", ...READ_SCHEMA.schema.required] } } }, required: ["pictures"] },
+}
+/** A picture at most 1024 px wide, as a JPEG (the reader sees what matters; the tokens are a fraction). */
+function smaller(file: string) {
+  const ff = process.env.STUDIO_FFMPEG || "ffmpeg"
+  const r = spawnSync(ff, ["-v", "error", "-i", file, "-vf", "scale='min(1024,iw)':-2", "-frames:v", "1", "-f", "image2", "-c:v", "mjpeg", "-q:v", "4", "-"], { maxBuffer: 2e7 })
+  return r.status === 0 && r.stdout.length ? r.stdout : readFileSync(file)
+}
 const PLAN_SCHEMA = {
   name: "product",
   schema: {
@@ -169,37 +179,41 @@ async function stillOf(file: string, dur = 2) {
     they are keep what you said. */
 async function readKit(k: ProductKit, fresh: boolean): Promise<{ kit: ProductKit; notes: string[] }> {
   const notes: string[] = []
-  const files: KitFile[] = []
+  // the pictures to read, each shrunk to 1024 px (what the reader needs to see, at a fraction of the tokens): read
+  // together, eight to a call, rather than a call each
+  const todo: { f: KitFile; data: Buffer; mime: string }[] = []
   for (const f of k.files) {
-    if (f.by === "you" || (f.by === "reader" && !fresh) || !(f.type.startsWith("image/") || f.type.startsWith("video/")) || f.type === "image/svg+xml") {
-      files.push(f)
-      continue
-    }
-    const data = f.type.startsWith("video/") ? await stillOf(fileOf(k, f), f.dur) : readFileSync(fileOf(k, f))
-    if (!data) {
-      files.push(f)
-      continue
-    }
-    const mime = f.type.startsWith("video/") ? "image/jpeg" : f.type
+    if (f.by === "you" || (f.by === "reader" && !fresh) || !(f.type.startsWith("image/") || f.type.startsWith("video/")) || f.type === "image/svg+xml") continue
+    const data = f.type.startsWith("video/") ? await stillOf(fileOf(k, f), f.dur) : smaller(fileOf(k, f))
+    if (data) todo.push({ f, data, mime: "image/jpeg" })
+  }
+  const read = new Map<string, KitFile>()
+  for (let i = 0; i < todo.length; i += 8) {
+    const batch = todo.slice(i, i + 8)
     try {
       const a = await run({
         job: "read",
-        schema: READ_SCHEMA,
-        maxTokens: 4000,
+        schema: READ_MANY,
+        maxTokens: 6000,
         messages: [
-          { role: "system", content: "You read a product's pictures for a film editor. Say what the picture is and what it shows, list the words on it that matter, where the most important thing is, and what chrome around it isn't the product. Plain words; JSON only." },
-          { role: "user", content: [{ type: "text", text: `File: ${f.name}${f.type.startsWith("video/") ? " (a still from a screen recording)" : ""}.` }, { type: "image_url", image_url: { url: `data:${mime};base64,${data.toString("base64")}` } }] },
+          { role: "system", content: "You read a product's pictures for a film editor. For each picture, by its number: say what it is and what it shows, list the words on it that matter, where the most important thing is, and what chrome around it isn't the product. Plain words; JSON only." },
+          { role: "user", content: batch.flatMap((x, j) => [{ type: "text" as const, text: `Picture ${j + 1}: ${x.f.name}${x.f.type.startsWith("video/") ? " (a still from a screen recording)" : ""}.` }, { type: "image_url" as const, image_url: { url: `data:${x.mime};base64,${x.data.toString("base64")}` } }]) },
         ],
       })
-      const j = parseJSON(a.text) as { kind?: string; shows?: string; text?: string[]; focus?: { x: number; y: number }; crop?: Record<string, number> }
-      files.push({
-        ...f,
-        kind: f.type.startsWith("video/") ? "clip" : fits(j.kind, f) ? (j.kind as FileKind) : f.kind,
-        shows: str(j.shows, 200),
-        text: (j.text ?? []).map((x) => str(x, 120)).filter(Boolean).slice(0, 8),
-        focus: j.focus ? { x: frac(j.focus.x), y: frac(j.focus.y) } : f.focus,
-        crop: j.crop ? { top: Math.min(0.3, frac(j.crop.top)), right: Math.min(0.3, frac(j.crop.right)), bottom: Math.min(0.3, frac(j.crop.bottom)), left: Math.min(0.3, frac(j.crop.left)) } : f.crop,
-        by: "reader",
+      const got = (parseJSON(a.text) as { pictures?: ({ n?: number; kind?: string; shows?: string; text?: string[]; focus?: { x: number; y: number }; crop?: Record<string, number> })[] }).pictures ?? []
+      got.forEach((j, idx) => {
+        const x = batch[(typeof j.n === "number" ? j.n - 1 : idx)] ?? batch[idx]
+        if (!x) return
+        const f = x.f
+        read.set(f.id, {
+          ...f,
+          kind: f.type.startsWith("video/") ? "clip" : fits(j.kind, f) ? (j.kind as FileKind) : f.kind,
+          shows: str(j.shows, 200),
+          text: (j.text ?? []).map((t) => str(t, 120)).filter(Boolean).slice(0, 8),
+          focus: j.focus ? { x: frac(j.focus.x), y: frac(j.focus.y) } : f.focus,
+          crop: j.crop ? { top: Math.min(0.3, frac(j.crop.top)), right: Math.min(0.3, frac(j.crop.right)), bottom: Math.min(0.3, frac(j.crop.bottom)), left: Math.min(0.3, frac(j.crop.left)) } : f.crop,
+          by: "reader",
+        })
       })
     } catch (e) {
       const m = (e as Error).message
@@ -208,10 +222,10 @@ async function readKit(k: ProductKit, fresh: boolean): Promise<{ kit: ProductKit
         notes.push(m)
         return { kit: k, notes }
       }
-      notes.push(`${f.name}: ${m}`)
-      files.push(f)
+      notes.push(`${batch.map((x) => x.f.name).join(", ")}: ${m}`)
     }
   }
+  const files = k.files.map((f) => read.get(f.id) ?? f)
   let kit: ProductKit = { ...k, files }
   // the words, unless you wrote them
   if (k.words.by !== "you" || fresh) {

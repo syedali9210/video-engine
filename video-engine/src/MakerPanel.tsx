@@ -23,7 +23,9 @@ async function api<T>(what: string, body?: object): Promise<T> {
 }
 const media = (v: string) => /^(image|video|anim):|^#[0-9a-f]{3,8}$/i.test(v)
 /** values that aren't lines: the theme and the score */
-const SETTINGS = new Set(["theme", "music"])
+const SETTINGS = new Set(["theme", "music", "spine"])
+type Beat = { act: string; say: string; sub?: string; carrier: string; seconds: number }
+type Card = { say: string; story: number; product: number; look: number; words: number; carriers: number; notes: string; shots?: { n: number; matches: boolean; note: string }[]; lint?: { gate: string; level: "fail" | "warn"; scene?: number; text: string }[] }
 const MOODS = [
   { value: "calm", label: "Calm" },
   { value: "bright", label: "Bright" },
@@ -49,6 +51,7 @@ export function MakerPanel({ kit, onOpen }: { kit: ProductKit; onOpen: (comp: un
   const [note, setNote] = useState("")
   const [said, setSaid] = useState("")
   const [render, setRender] = useState<{ job: string; state: string; frame: number; total: number } | null>(null)
+  const [card, setCard] = useState<Card | null>(null)
 
   useEffect(() => {
     setFilm(null)
@@ -90,6 +93,8 @@ export function MakerPanel({ kit, onOpen }: { kit: ProductKit; onOpen: (comp: un
     }
   })()
   const music = (film?.comp as { music?: { mood?: string; name?: string } } | undefined)?.music
+  // a directed film: its story, beat by beat (edited by directing it again, not line by line)
+  const beats: Beat[] | null = v?.film === "directed" && v.values.spine ? (JSON.parse(v.values.spine) as { beats: Beat[] }).beats : null
   const change = (what: string, ops: object[]) => film && act(what, async () => setFilm((await api<{ film: Film }>("edit", { id: film.id, ops })).film))
 
   const set = (p: Partial<Brief>) => brief && setBrief({ ...brief, ...p })
@@ -180,7 +185,21 @@ export function MakerPanel({ kit, onOpen }: { kit: ProductKit; onOpen: (comp: un
           })}>
             <Sparkle size={15} aria-hidden /> Make the film
           </Button>
+          <Button disabled={!!busy} onClick={() => act("direct", async () => {
+            const f = await api<Film>("direct", { kit: kit.id, length: 30, size: size || undefined, notes: note.trim() || undefined })
+            setFilm(f)
+            setRender(null)
+            setCard(null)
+            setFilms((x) => [{ id: f.id, kit: f.kit, name: f.name, made: f.made, versions: f.versions.length }, ...x])
+          })} label="A 30 s film directed from a story: the product's screens and recordings, one world, its liquid mark">
+            <MagicWand size={15} aria-hidden /> Direct a film
+          </Button>
         </div>
+        {busy === "direct" && (
+          <div className="mt-4 flex items-center gap-2 text-body text-fg-2">
+            <Glyph variant="breathe" size={18} /> The story, then one world under it…
+          </div>
+        )}
         {busy === "make" && (
           <div className="mt-4 flex items-center gap-2 text-body text-fg-2">
             <Glyph variant="breathe" size={18} /> The brief, the pick, then every line in one call…
@@ -195,10 +214,45 @@ export function MakerPanel({ kit, onOpen }: { kit: ProductKit; onOpen: (comp: un
         {film && v && (
           <div className="mt-5">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h3 className="text-ui font-semibold">{chosen?.name ?? templates.find((t) => t.id === v.template)?.name ?? v.template}</h3>
+              <h3 className="text-ui font-semibold">{beats ? film.name : (chosen?.name ?? templates.find((t) => t.id === v.template)?.name ?? v.template)}</h3>
               <span className="text-caption tabular-nums text-fg-3">{cost(film.log)} · version {film.versions.length}</span>
             </div>
             {chosen?.reasons.length ? <p className="mt-1 text-caption text-fg-3">Picked because it {chosen.reasons.join("; ")}.</p> : null}
+            {beats && (
+              <ol className="mt-3 grid gap-1">
+                {beats.map((b, i) => (
+                  <li key={i} className="grid grid-cols-[64px_minmax(0,1fr)_auto] gap-2 rounded-lg px-2 py-1 text-body hover:bg-surface-2">
+                    <span className="text-fg-3">{b.act}</span>
+                    <span className="min-w-0">
+                      {b.say || "—"}
+                      {b.sub && <span className="block text-caption text-fg-3">{b.sub}</span>}
+                    </span>
+                    <span className="text-caption tabular-nums text-fg-3">
+                      {b.carrier.split(":")[0]} · {b.seconds.toFixed(1)} s
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            )}
+            {card && (
+              <div className="mt-3 rounded-lg px-2 py-2 text-body shadow-[0_0_0_1px_var(--line)]">
+                <div className="flex flex-wrap gap-x-4 gap-y-1 tabular-nums">
+                  {(["story", "product", "look", "words", "carriers"] as const).map((k) => (
+                    <span key={k} className={card[k] < 4 ? "text-[var(--bad,#e5484d)]" : "text-fg-2"}>
+                      {k} {card[k]}/5
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-1 text-caption text-fg-3">{card.say}</p>
+                {/* the cross-check: gates that failed, shots that don't show what they mean */}
+                {[...(card.lint ?? []).filter((x) => x.level === "fail").map((x) => `${x.gate}${x.scene !== undefined ? ` · shot ${x.scene + 1}` : ""}: ${x.text}`), ...(card.shots ?? []).filter((x) => !x.matches).map((x) => `shot ${x.n}: ${x.note}`)].map((t, i) => (
+                  <p key={i} className="mt-1 text-caption text-[var(--bad,#e5484d)]">
+                    {t}
+                  </p>
+                ))}
+                {card.notes && <p className="mt-1 text-caption text-fg-2">Next time: {card.notes}</p>}
+              </div>
+            )}
             <ul className="mt-3 grid gap-1">
               {Object.entries(v.values)
                 .filter(([k, x]) => !media(String(x)) && !SETTINGS.has(k))
@@ -222,7 +276,7 @@ export function MakerPanel({ kit, onOpen }: { kit: ProductKit; onOpen: (comp: un
             <p className="mt-2 flex items-center gap-1.5 text-caption text-fg-3">{errors.length ? <WarningCircle size={14} aria-hidden /> : <Check size={14} aria-hidden />}{errors.length ? `${errors.length} line${errors.length === 1 ? "" : "s"} to fix` : "Every line checked: fits, the product's own words, no invented figures"}</p>
 
             {/* the product's look over the template's, and the score cut to the film */}
-            <div className="mt-4 flex flex-wrap items-end gap-3">
+            {!beats && <div className="mt-4 flex flex-wrap items-end gap-3">
               <Segmented label="Colours and type" value={fit} onChange={(f) => change("theme", [{ op: "theme", fit: f }])} options={[{ value: "product", label: "The product's" }, { value: "accent", label: "Its accent" }, { value: "template", label: "The template's" }]} />
               <label>
                 <span className="mb-1 block text-caption text-fg-3">Music{music?.name ? `: ${music.name}` : ""}</span>
@@ -234,22 +288,30 @@ export function MakerPanel({ kit, onOpen }: { kit: ProductKit; onOpen: (comp: un
                   ))}
                 </Select>
               </label>
-            </div>
+            </div>}
 
             <div className="mt-4 flex flex-wrap gap-2">
+              <Button size="sm" disabled={!!busy} onClick={() => act("stills", async () => setRender({ job: (await api<{ job: string }>("render", { id: film.id, stills: true })).job, state: "queued", frame: 0, total: 0 }))} label="Two frames a second at a quarter of the size: every shot, in seconds">
+                Quick look
+              </Button>
+              {beats && (
+                <Button size="sm" disabled={!!busy} onClick={() => act("review", async () => setCard(await api<Card>("review", { id: film.id })))} label="Stills of every shot, scored against the brief">
+                  Score it
+                </Button>
+              )}
               <Button size="sm" disabled={!!busy} onClick={() => act("draft", async () => setRender({ job: (await api<{ job: string }>("render", { id: film.id, draft: true })).job, state: "queued", frame: 0, total: 0 }))}>
                 <Play size={14} aria-hidden /> Draft
               </Button>
               <Button size="sm" disabled={!!busy} onClick={() => act("final", async () => setRender({ job: (await api<{ job: string }>("render", { id: film.id })).job, state: "queued", frame: 0, total: 0 }))}>
                 Render
               </Button>
-              <Button size="sm" disabled={!!busy || render?.state !== "done"} onClick={() => act("critic", async () => {
+              {!beats && <Button size="sm" disabled={!!busy || render?.state !== "done"} onClick={() => act("critic", async () => {
                 const c = await api<{ say: string; film: Film }>("critic", { id: film.id })
                 setFilm(c.film)
                 setSaid(c.say)
               })}>
                 Review the draft
-              </Button>
+              </Button>}
               <Button size="sm" onClick={() => onOpen(film.comp)}>
                 <ArrowSquareOut size={14} aria-hidden /> Open in the Studio
               </Button>

@@ -16,11 +16,18 @@
 //   POST /__film/critic { id }                  stills of the last render read against the brief; fixes applied
 //   POST /__film/keep { id, keep }              your verdict: taste for the picker
 //   POST /__film/contract { film }              a contract drafted for a template that has none
+//   POST /__film/direct { kit, length?, size?, style?, notes?, review? }   a film directed from a story
+//                                               (src/studio/screenplay.ts); review: read it and direct it again
+//                                               with the critic's notes while a score is under 4
+//   POST /__film/review { id }                  stills of a film, its scorecard and its cross-check
+//   GET  /__film/assets · POST /__film/asset { kit, kind: world|mark|shape, id? }   the generator (server/generate.ts)
+//   GET  /__film/media/<name>                    a recording placed on a film's clock
 //   POST /__film/sequence { kit, parts: [{ template, shots?, screens? }], size?, length?, mood?, seam? }
 //                                               one film from several templates' shots
 import { execFileSync } from "node:child_process"
 import { randomUUID } from "node:crypto"
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs"
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs"
+import { createHash } from "node:crypto"
 import type { IncomingMessage, ServerResponse } from "node:http"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -28,8 +35,9 @@ import type { Plugin, ViteDevServer } from "vite"
 import { parseJSON } from "./ai.ts"
 import { run, type Answer } from "./work.ts"
 import { loadKit } from "./kits.ts"
-import { devtools, dropProfile, findChrome, jobFile } from "./studio.ts"
+import { devtools, dropProfile, findChrome, jobFile, sendFile } from "./studio.ts"
 import { scored } from "./music.ts"
+import { generator } from "./generate.ts"
 import type { Brief, Op, Pick, Problem, Stage, TemplateInfo } from "../src/studio/maker.ts"
 import type { Contract } from "../src/studio/contracts.ts"
 import type { ProductKit } from "../src/studio/product.ts"
@@ -86,9 +94,25 @@ export function maker(): Plugin {
         P: (await server.ssrLoadModule("/src/studio/product.ts")) as { fillSlots: (k: ProductKit, s: Slot[]) => { values: Record<string, string>; kept: string[] }; kitCopy: (k: ProductKit) => Record<string, unknown> },
         C: (await server.ssrLoadModule("/src/studio/comp.ts")) as { TEMPLATES: TemplateT[]; SAMPLE_COPY: Record<string, unknown> },
         F: (await server.ssrLoadModule("/src/studio/formats.ts")) as { reframe: (c: unknown, size: string, lib: unknown[], focus: unknown) => CompT },
+        SP: (await server.ssrLoadModule("/src/studio/screenplay.ts")) as unknown as SPT,
+        A: (await server.ssrLoadModule("/src/studio/artist.ts")) as { DIRECTIONS: DirectionT[] },
+        SC: (await server.ssrLoadModule("/src/studio/script.ts")) as { compileScript: (s: unknown, ctx: unknown) => CompT },
+        CC: (await server.ssrLoadModule("/src/studio/crosscheck.ts")) as typeof import("../src/studio/crosscheck.ts"),
         R: (await server.ssrLoadModule("/src/registry.ts")) as { byId: (id: string) => { params?: Record<string, unknown>; film?: { size: string; end: number; shots: { at: number; energy: number; enter: string }[] } } | undefined },
       })
-      type CompT = { size: string; fps: number; music?: unknown; scenes: { duration: number; layers: { kind: string; anim?: string; values?: Record<string, unknown> }[] }[] }
+      // the director's module as the server uses it (its own types would pull the app into the server's check)
+      type Carrier = { id: string; kind: "words" | "logo" | "device" | "clip" | "shape"; what: string; file?: string; seconds?: number; phone?: boolean }
+      type SpineT = { promise: string; throughline: string; signature: string; beats: { role: string; buys: string; say: string; sub?: string; carrier: string; seconds: number }[] }
+      type MeaningT = { role: string; buys: string; says: string; carrier: string; shows: string }
+      type DirectionT = { id: string; name: string; hint: string; energy: number; tempo: number }
+      type SPT = {
+        spineRequest: (b: Brief, c: Carrier[], o: { length: number; tone: string; notes?: string }) => { schema: { name: string; schema: object }; messages: { role: "system" | "user"; content: string }[] }
+        fixSpine: (raw: unknown, c: Carrier[], b: Brief, length: number) => SpineT
+        productShare: (s: SpineT, c: Carrier[]) => number
+        buildFilm: (s: SpineT, c: Carrier[], ad: DirectionT, m: { world: string; mark: string; shapes: Record<string, string>; screen: (file: string) => string; clip: (file: string, start: number, seconds: number) => string }, o: { size?: string; url?: string; name: string }) => { script: unknown; devices: ({ src: string; phone: boolean } | null)[]; starts: number[]; energy: number[]; meanings: MeaningT[] }
+        METAPHORS: { id: string; means: string }[]
+      }
+      type CompT = { size: string; fps: number; music?: unknown; scenes: { duration: number; name?: string; transition?: string; meaning?: MeaningT; layers: { kind: string; anim?: string; values?: Record<string, unknown> }[] }[] }
       type TemplateT = { id: string; name: string; film?: boolean; size?: string; make: (x: unknown) => CompT; values?: (x: unknown) => { anim: string; values: Record<string, string> } }
 
       /* ---------------- records ---------------- */
@@ -247,6 +271,19 @@ export function maker(): Plugin {
           made = F.reframe(made, size, L.LIBRARY, focus)
         }
         // the score, made for this film's cuts: each scene's shot says its energy and how it comes in
+        // each scene keeps what its shot is for: its role, its job in the contract's story, the lines it shows
+        const lib = L.LIBRARY as { id: string; film: string; name: string; at: number; role: string[]; shows: string[] }[]
+        const roleOf = (r: string[]) => (r.includes("hook") ? "hook" : r.includes("intro") ? "turn" : r.includes("cta") || r.includes("logo") ? "cta" : "proof")
+        made = {
+          ...made,
+          scenes: made.scenes.map((sc) => {
+            const l = sc.layers.find((x) => x.kind === "component") as { anim?: string; from?: number } | undefined
+            const shot = lib.find((x) => x.film === l?.anim && Math.abs(x.at - (l?.from ?? -1)) < 0.05)
+            if (!shot) return sc
+            const job = c?.shots[shot.name] ?? ""
+            return { ...sc, meaning: { role: roleOf(shot.role), buys: job, says: shot.shows.map((k) => all[k]).filter((v) => v && !/^(image|video|anim):|^#|^\{/.test(v)).join(" · "), carrier: `shot:${shot.id}`, shows: job } }
+          }),
+        }
         const mood = all.music || M.moodFor(c)
         if (mood !== "none" && o.music !== false) made = { ...made, music: await scoreComp(made, mood) }
         return { comp: made, film: film.anim, values: all }
@@ -278,6 +315,135 @@ export function maker(): Plugin {
         const problems = M.checkLines(values, slots, c, b, S.fitText)
         step(log, "build and check", t0, null, `${Object.keys(written).length} lines written, ${problems.filter((p) => p.level === "error").length} problems`)
         const f: FilmRecord = { id: randomUUID().slice(0, 12), kit: k.id, name: `${b.product}: ${chosen.name}`, made: new Date().toISOString(), picks: picks.slice(0, 5), versions: [{ at: new Date().toISOString(), template: chosen.id, film, size: comp.size, values, problems }], comp, renders: [], log }
+        save(f)
+        return f
+      }
+
+      /* ---------------- a film directed from a story ---------------- */
+      const media = join(dir, "media")
+      mkdirSync(media, { recursive: true })
+      const ff = () => process.env.STUDIO_FFMPEG || "ffmpeg"
+      // the world, the mark and the shapes, made for the brand (server/generate.ts)
+      const gen = generator({ origin, root: server.config.root, media })
+      /** Where in a clip the `seconds` with the most colour and light start: its frames read once (4 a second, small),
+          each scored by saturation and brightness, the best window of them. */
+      const windows = new Map<string, number[]>()
+      function bestWindow(file: string, dur: number, seconds: number) {
+        const last = Math.max(0, dur - seconds - 0.25)
+        try {
+          let score = windows.get(file)
+          if (!score) {
+            const r = execFileSync(ff(), ["-v", "error", "-i", file, "-vf", "fps=4,scale=160:-2,signalstats,metadata=print:file=-", "-an", "-f", "null", "-"], { maxBuffer: 2e7 }).toString()
+            const sat = [...r.matchAll(/lavfi\.signalstats\.SATAVG=([\d.]+)/g)].map((m) => +m[1])
+            const lum = [...r.matchAll(/lavfi\.signalstats\.YAVG=([\d.]+)/g)].map((m) => +m[1])
+            score = sat.map((v, i) => v * 2 + (lum[i] ?? 0) * 0.3)
+            windows.set(file, score)
+          }
+          const n = Math.max(1, Math.round(seconds * 4))
+          // a window may run up to 1.5 s past the end, on its last frame held (a page that only fills in at the end)
+          const held = [...score, ...Array(6).fill(score.at(-1) ?? 0)]
+          let best = last
+          let top = -1
+          for (let i = 0; i + n <= held.length; i++) {
+            const avg = held.slice(i, i + n).reduce((a, x) => a + x, 0) / n
+            // (ties go to the later window: the result, not the way there)
+            if (avg >= top * 1.03) (top = avg), (best = i / 4)
+          }
+          return Math.max(0, Math.min(best, dur - 0.5))
+        } catch {
+          return last
+        }
+      }
+      /** A recording placed on a film's clock: its last part (where the result shows), held from `start` (exports seek
+          a video to the film's time, so at `start` it's at its first frame). */
+      function placeClip(k: ProductKit, file: string, start: number, seconds: number) {
+        const f = k.files.find((x) => x.id === file)!
+        // the stretch where the result shows: a beat is an action and what you get, so the window with the most colour
+        // and light (a page filled in, not its grey placeholders), measured once a clip (else its last stretch)
+        const from = bestWindow(join(root, "kits", k.id, "files", f.id), f.dur ?? seconds, seconds)
+        const name = `${createHash("sha1").update(JSON.stringify([f.id, from, start, seconds])).digest("hex").slice(0, 16)}.mp4`
+        const out = join(media, name)
+        if (!existsSync(out))
+          execFileSync(ff(), ["-y", "-loglevel", "error", "-ss", from.toFixed(2), "-t", (seconds + 0.2).toFixed(2), "-i", join(root, "kits", k.id, "files", f.id), "-vf", `scale=1920:-2,fps=30,tpad=start_duration=${start.toFixed(3)}:start_mode=clone,tpad=stop_duration=2.5:stop_mode=clone`, "-an", "-c:v", "libx264", "-crf", "18", "-preset", "veryfast", "-g", "12", "-pix_fmt", "yuv420p", out])
+        return `/__film/media/${name}`
+      }
+
+      /** Directs a film and reads it, and while its weakest score is under 4, directs it again with the critic's notes
+          (two rounds at most): the best film comes back, with every card. */
+      async function directed(o: Parameters<typeof direct>[0] & { rounds?: number }) {
+        const { M } = await mods()
+        let f = await direct(o)
+        let card = await review(f)
+        const cards = [{ id: f.id, card }]
+        let best = { f, card }
+        // again while a score is under 4, a gate fails, or a shot doesn't show what it means
+        const short = (c: typeof card) => M.weakest(c) < 4 || c.lint.some((x) => x.level === "fail") || (c.shots ?? []).some((x) => !x.matches)
+        for (let r = 1; r < (o.rounds ?? 2) && short(card) && card.notes; r++) {
+          f = await direct({ ...o, notes: [o.notes, card.notes].filter(Boolean).join(" ") })
+          card = await review(f)
+          cards.push({ id: f.id, card })
+          if (M.weakest(card) > M.weakest(best.card)) best = { f, card }
+        }
+        return { film: load(best.f.id) ?? best.f, card: best.card, cards }
+      }
+
+      async function direct(o: { kit: string; length?: number; size?: string; style?: string; notes?: string; mood?: string }) {
+        const { SP, A, SC, P } = await mods()
+        const log: Stage[] = []
+        const k = loadKit(o.kit)
+        if (!k) throw new Error(`No product kit “${o.kit}”`)
+        const length = Math.max(10, Math.min(90, o.length ?? 30))
+        let t0 = Date.now()
+        let b = loadBrief(k.id)
+        if (b?.by === "rules") b = null
+        if (b) step(log, "brief", t0, null, "kept from before")
+        else saveBrief(k.id, (b = await writeBrief(k, log)))
+        const brief = b
+        // what can carry a beat: the product's screens and recordings, as the reader saw them
+        const carriers: Carrier[] = [
+          { id: "words", kind: "words", what: "the line alone, big, on the film's world" },
+          { id: "logo", kind: "logo", what: "the product's mark forming in liquid metal, its name under it" },
+          ...k.files.filter((f) => f.kind === "desktop" || f.kind === "phone").map((f) => ({ id: `screen:${f.id.slice(0, 8)}`, kind: "device" as const, file: f.id, phone: f.kind === "phone", what: `its screen on a ${f.kind === "phone" ? "phone" : "laptop"}: ${f.shows ?? f.name}` })),
+          ...k.files.filter((f) => f.kind === "clip").map((f) => ({ id: `clip:${f.id.slice(0, 8)}`, kind: "clip" as const, file: f.id, seconds: f.dur, what: `a recording of someone using it: ${(f.name.split(": ").slice(1).join(": ") || f.shows) ?? f.name}` })),
+          // the generator's shapes, each one idea: only the ones a beat uses are made
+          ...SP.METAPHORS.map((x) => ({ id: x.id, kind: "shape" as const, what: `a shape: ${x.means}` })),
+        ]
+        const dark = !k.brand.ground || parseInt(k.brand.ground.slice(1, 3), 16) < 90
+        const ad = A.DIRECTIONS.find((d) => d.id === o.style) ?? A.DIRECTIONS.find((d) => d.id === (dark ? "keynote" : "glass"))!
+        t0 = Date.now()
+        const req = SP.spineRequest(brief, carriers, { length, tone: `${ad.name}: ${ad.hint}`, notes: o.notes })
+        const a = await run({ job: "plan", schema: req.schema, maxTokens: 3000, messages: req.messages })
+        step(log, "story", t0, a)
+        const spine = SP.fixSpine(parseJSON(a.text), carriers, brief, length)
+        // the world, the mark and the shapes the story uses: made once for the brand, kept after
+        t0 = Date.now()
+        const res = await gen.forFilm(k, [...new Set(spine.beats.map((x) => x.carrier).filter((c) => c.startsWith("shape:")))])
+        step(log, "world, mark and shapes", t0, null, `${Object.keys(res.shapes).length} shapes: ${Object.keys(res.shapes).join(", ") || "none"}`)
+        t0 = Date.now()
+        const built = SP.buildFilm(spine, carriers, ad, { world: res.world, mark: res.mark, shapes: res.shapes, screen: (file) => k.files.find((f) => f.id === file)!.url, clip: (file, start, seconds) => placeClip(k, file, start, seconds) }, { size: o.size ?? "16x9", url: brief.url, name: brief.product })
+        const accent = k.brand.accent || k.brand.ink || "#ededed"
+        const brand = { name: brief.product, bg: k.brand.ground ?? "#000000", surface: "#111113", ink: k.brand.ink ?? "#ededed", muted: "#a1a1aa", accent, onAccent: "#0b0b0c", font: k.brand.text ?? "", display: k.brand.display ?? "", mono: "", radius: k.brand.radius ?? 12, dark, fonts: k.brand.fonts ?? [] }
+        let comp = SC.compileScript(built.script, { device: "macbook", posture: "open", anim: "maze-walk", copy: { ...P.kitCopy(k), name: brief.product }, brand, accent })
+        // each device shows the product's screen, and stands in the world (the world first, so it's behind)
+        comp = {
+          ...comp,
+          fps: 60,
+          scenes: comp.scenes.map((sc, i) => {
+            const d = built.devices[i]
+            const layers = sc.layers.map((l) => (l.kind === "device" && d ? { ...l, content: { kind: "image", src: d.src, name: "screen" }, fit: "fill" } : l))
+            const dev = layers.filter((l) => l.kind === "device")
+            const flat = layers.filter((l) => l.kind !== "device")
+            // and keeps what it's for: its role, the belief it buys, its words, what carries it, what it shows
+            return { ...sc, meaning: built.meanings[i], layers: dev.length ? [flat[0], ...dev, ...flat.slice(1)] : flat }
+          }),
+        }
+        // the score, cut to the beats: each scene's energy from its act
+        const mood = o.mood ?? (ad.energy >= 0.85 ? "bright" : ad.tempo >= 120 ? "driving" : dark ? "dark" : "calm")
+        const total = built.starts.at(-1)! + comp.scenes.at(-1)!.duration
+        comp = { ...comp, music: scored(join(root, "music"), built.starts.map((at, i) => ({ at, energy: built.energy[i], enter: i ? "cut" : "cut" })), total, mood as Parameters<typeof scored>[3]) }
+        const share = SP.productShare(spine, carriers)
+        step(log, "build", t0, null, `${spine.beats.length} beats, ${total.toFixed(1)} s, ${Math.round(share * 100)}% on the product, ${ad.name}, ${mood} score`)
+        const f: FilmRecord = { id: randomUUID().slice(0, 12), kit: k.id, name: `${brief.product}: directed (${ad.name})`, made: new Date().toISOString(), picks: [], versions: [{ at: new Date().toISOString(), template: `directed:${ad.id}`, film: "directed", size: comp.size, values: { spine: JSON.stringify(spine) }, problems: [] }], comp, renders: [], log }
         save(f)
         return f
       }
@@ -418,7 +584,7 @@ export function maker(): Plugin {
       }
 
       /* ---------------- rendering, by the Studio itself ---------------- */
-      async function render(f: FilmRecord, draft: boolean) {
+      async function render(f: FilmRecord, draft: boolean, stills = false) {
         const chrome = findChrome()
         if (!chrome) throw new Error("Couldn't find Chrome or Edge.")
         const profile = mkdtempSync(join(tmpdir(), "anim-engine-chrome-maker-"))
@@ -432,9 +598,10 @@ export function maker(): Plugin {
           await cdp.evaluate(`window.__engine.load(${JSON.stringify(f.comp)})`)
           // the Studio mounts the film's scenes and their screens
           await sleep(5000)
-          const job = String(await cdp.evaluate(`window.__engine.render("video", { draft: ${draft} })`))
+          const job = String(await cdp.evaluate(`window.__engine.render("video", { draft: ${draft}, stills: ${stills} })`))
           f.renders.push({ at: new Date().toISOString(), job, draft })
-          step(f.log, draft ? "draft render queued" : "render queued", t0)
+          const what = stills ? "stills render" : draft ? "draft render" : "render"
+          step(f.log, `${what} queued`, t0)
           save(f)
           // the render's own time, logged when it finishes (this call returns once it's queued)
           const started = Date.now()
@@ -444,7 +611,7 @@ export function maker(): Plugin {
               const s = (await fetch(`${origin()}/__studio/jobs/${job}`).then((r) => r.json()).catch(() => null)) as { state?: string; total?: number } | null
               if (s?.state !== "done" && s?.state !== "error") continue
               const g = load(f.id)
-              if (g) (step(g.log, `${draft ? "draft render" : "render"} ${s.state === "done" ? "done" : "failed"}`, started, null, `${s.total ?? 0} frames`), save(g))
+              if (g) (step(g.log, `${what} ${s.state === "done" ? "done" : "failed"}`, started, null, `${s.total ?? 0} frames`), save(g))
               return
             }
           })()
@@ -484,6 +651,51 @@ export function maker(): Plugin {
         const known = new Set(Object.keys(v.values))
         const ops: Op[] = (Array.isArray(j.fixes) ? j.fixes : []).filter((x) => known.has(x.key)).map((x) => ({ op: "rewrite", keys: [x.key], note: x.note }))
         return { say: j.say ?? "", film: ops.length ? await edit(f, ops, `critic: ${j.say ?? ""}`) : f, ops }
+      }
+
+      /* ---------------- the scorecard: a directed film read from its stills ---------------- */
+      /** Waits for a render job to finish: its file. */
+      async function finished(job: string) {
+        for (let i = 0; i < 3600; i++) {
+          const s = (await fetch(`${origin()}/__studio/jobs/${job}`).then((r) => r.json()).catch(() => null)) as { state?: string; error?: string } | null
+          if (s?.state === "done") return jobFile(job)!
+          if (s?.state === "error") throw new Error(`The render failed: ${s.error}`)
+          await sleep(1000)
+        }
+        throw new Error("The render took too long")
+      }
+      /** Stills of the film (a quick render: a few frames a second), read against the brief and the film's own spine. */
+      async function review(f: FilmRecord) {
+        const { M, CC } = await mods()
+        let t0 = Date.now()
+        const file = await finished(await render(f, false, true))
+        f = load(f.id) ?? f
+        const comp = f.comp as CompT
+        const starts = comp.scenes.reduce<number[]>((a, s, i) => [...a, i ? a[i - 1] + comp.scenes[i - 1].duration : 0], [])
+        const stills = comp.scenes.slice(0, 10).map((s, i) => execFileSync(ff(), ["-v", "error", "-ss", (starts[i] + s.duration * 0.62).toFixed(2), "-i", file, "-frames:v", "1", "-vf", "scale=640:-2", "-f", "image2", "-c:v", "mjpeg", "-q:v", "5", "-"], { maxBuffer: 1e7 }).toString("base64"))
+        step(f.log, "stills", t0, null, `${comp.scenes.length} shots`)
+        t0 = Date.now()
+        const spine = f.versions.at(-1)?.values.spine
+        // the code's pass first (free): motionmaxxing's gates and the meanings, on the composition
+        const lint = CC.lintFilm(comp as never)
+        // then the look: each still against what its shot is meant to do, and the whole scored
+        const meant = comp.scenes.slice(0, 10).map((s, i) => ({ n: i + 1, ...(s.meaning ?? { role: "", buys: "", says: "", carrier: "", shows: s.name ?? "" }) }))
+        const a = await run({
+          job: "critic",
+          schema: M.SCORE_SCHEMA,
+          maxTokens: 4000,
+          messages: [
+            { role: "system", content: "You review a product's launch film as a senior motion designer would, from one still of each shot, in order. For each still you're told what its shot is meant to do: its role, the belief it buys, its words, what it shows. Say for each whether the picture actually does that, and if not, what's wrong and what would fix it (another recording or screen, other words). Then score the film 1 to 5 on each line of the card, strictly: 5 is a film you'd put on the product's homepage; a mix of clips, a slide layout, unreadable product or words that don't match the picture are 2. Then tell the director in plain words what to change. JSON only." },
+            { role: "user", content: [{ type: "text", text: JSON.stringify({ brief: loadBrief(f.kit), story: spine ? JSON.parse(spine) : undefined, shots: meant }) }, ...stills.flatMap((s, i) => [{ type: "text" as const, text: `Still ${i + 1}:` }, { type: "image_url" as const, image_url: { url: `data:image/jpeg;base64,${s}` } }])] },
+          ],
+        })
+        const card = parseJSON(a.text) as import("../src/studio/maker.ts").Scorecard
+        const off = (card.shots ?? []).filter((x) => !x.matches)
+        step(f.log, "cross-check", t0, a, `story ${card.story} · product ${card.product} · look ${card.look} · words ${card.words} · carriers ${card.carriers}; ${off.length} shots off their meaning; ${lint.filter((x) => x.level === "fail").length} gates failed`)
+        save(f)
+        // what the director is told next time: the gates that failed, the shots that don't show their meaning, the critic
+        const notes = [CC.notesOf(lint), ...off.map((x) => `Shot ${x.n}: ${x.note}`), card.notes].filter(Boolean).join(" ")
+        return { ...card, lint, notes }
       }
 
       /* ---------------- a contract drafted for a template without one ---------------- */
@@ -545,19 +757,36 @@ export function maker(): Plugin {
           }
           if (what === "make") return json(res, 200, await make({ kit: String(body.kit), template: body.template as string, size: body.size as string, length: Number(body.length) || undefined, fresh: !!body.fresh }))
           if (what === "sequence") return json(res, 200, await makeSequence(body as Parameters<typeof makeSequence>[0]))
+          if (what === "direct") return json(res, 200, body.review ? await directed(body as Parameters<typeof directed>[0]) : await direct(body as Parameters<typeof direct>[0]))
+          if (what === "review") return json(res, 200, await review(get(body.id)))
+          // the generator: the shapes it knows (each one idea), and any asset made for a product on demand
+          if (what === "assets") return json(res, 200, (await mods()).SP.METAPHORS)
+          if (what === "asset") {
+            const k = loadKit(String(body.kit))
+            if (!k) return json(res, 404, { error: "No such product kit" })
+            const kind = String(body.kind)
+            const url = kind === "world" ? await gen.world(k) : kind === "mark" ? await gen.mark(k) : kind === "shape" ? await gen.shape(k, String(body.id)) : null
+            if (!url) return json(res, 400, { error: "kind: world, mark or shape (with id)" })
+            return json(res, 200, { url })
+          }
+          if (what.startsWith("media/")) {
+            const name = what.slice("media/".length)
+            if (!/^[\w-]+\.mp4$/.test(name) || !existsSync(join(media, name))) return json(res, 404, { error: "No such file" })
+            return sendFile(req, res, join(media, name), "video/mp4")
+          }
           if (what === "get") return json(res, 200, get(url.searchParams.get("id")))
           if (what === "list")
             return json(res, 200, readdirSync(dir).filter((x) => x.endsWith(".json")).map((x) => JSON.parse(readFileSync(join(dir, x), "utf8")) as FilmRecord).map((f) => ({ id: f.id, kit: f.kit, name: f.name, made: f.made, versions: f.versions.length, keep: f.keep })).sort((a, b) => (a.made < b.made ? 1 : -1)))
           if (what === "edit") {
             const f = get(body.id)
-            if (f.versions.at(-1)?.film === "sequence") return json(res, 400, { error: "A film of several templates can't be edited yet: change its parts and make it again (POST /__film/sequence)." })
+            if (f.versions.at(-1)?.film === "sequence" || f.versions.at(-1)?.film === "directed") return json(res, 400, { error: "A film of several templates can't be edited yet: change its parts and make it again (POST /__film/sequence)." })
             let ops = Array.isArray(body.ops) ? (body.ops as Op[]) : []
             let say = ""
             if (!ops.length && typeof body.note === "string" && body.note.trim()) ({ ops, say } = await noteToOps(f, body.note.trim()))
             if (!ops.length) return json(res, 200, { film: f, say: say || "Nothing to change." })
             return json(res, 200, { film: await edit(f, ops, typeof body.note === "string" ? body.note : undefined), say, ops })
           }
-          if (what === "render") return json(res, 200, { job: await render(get(body.id), !!body.draft) })
+          if (what === "render") return json(res, 200, { job: await render(get(body.id), !!body.draft, !!body.stills) })
           if (what === "critic") return json(res, 200, await critic(get(body.id)))
           if (what === "keep") {
             const f = get(body.id)

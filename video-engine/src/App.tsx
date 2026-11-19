@@ -104,7 +104,7 @@ type EngineApi = {
   film: (o: FilmBrief) => Promise<{ template: string; name: string; scenes: number; seconds: number }>;
   /** hands the film in the Studio to the renderer: the job's id (GET /__studio/jobs/:id, then /file); a draft is half
       size at 30 fps, encoded fast, to look at */
-  render: (kind?: ExportKind, o?: { draft?: boolean }) => Promise<string>;
+  render: (kind?: ExportKind, o?: { draft?: boolean; stills?: boolean }) => Promise<string>;
   /** opens a composition in the Studio as it is (the film maker's, server/maker.ts) */
   load: (c: Comp) => void;
   canvas: (o: CanvasBrief) => Promise<{ doc: CanvasDoc; z: string }>;
@@ -1112,6 +1112,8 @@ export default function App() {
     },
     render: async (kind = "video", o = {}) => {
       const size = SIZES.find((x) => x.id === comp.size) ?? SIZES[0];
+      // stills: half the size at 2 frames a second, enough to judge every shot (and for the critic to read its words)
+      if (o.stills) return submitJob(kind, await renderConfig(kind), { w: Math.round(size.w / 2 / 2) * 2, h: Math.round(size.h / 2 / 2) * 2 }, 2, true);
       return o.draft ? submitJob(kind, await renderConfig(kind), { w: Math.round(size.w / 2 / 2) * 2, h: Math.round(size.h / 2 / 2) * 2 }, 30, true) : submitJob(kind, await renderConfig(kind), size, comp.fps);
     },
     load: (c) => {

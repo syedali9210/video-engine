@@ -93,7 +93,8 @@ export type ComponentLayer = Base &
   /** a launch film's speed in this scene (its shot retimed: 0.8 plays its motion slower, to fill a longer scene) */
   rate?: number
 }
-export type ImageLayer = Base & Motion & Frame & { kind: "image"; src: string; file: string; aspect: number; box: Box; radius: number; enter: Enter; hairline?: boolean }
+/** `blend: "screen"`: its black drops away (a shader video on black, laid over the film's world) */
+export type ImageLayer = Base & Motion & Frame & { kind: "image"; src: string; file: string; aspect: number; box: Box; radius: number; enter: Enter; hairline?: boolean; blend?: "screen" | "lighten" | "multiply" }
 export type TextLayer = Base &
   Motion & {
   kind: "text"
@@ -176,6 +177,9 @@ export const VIEW: View2D = { x: 0.5, y: 0.5, zoom: 1 }
 export type Scene = {
   id: string
   name: string
+  /** what the shot is for, as its director meant it (screenplay.ts Meaning): its role in the story (hook, turn, proof,
+      cta), the one belief it buys, the words on it, what carries it, what it shows. The cross-checker reads it. */
+  meaning?: { role: string; buys: string; says: string; carrier: string; shows: string }
   /** seconds */
   duration: number
   /** how this scene takes over from the one before it */

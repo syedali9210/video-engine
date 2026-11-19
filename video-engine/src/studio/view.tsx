@@ -1045,7 +1045,7 @@ const SceneView = forwardRef<
           if (x) flats.current.set(l.id, x)
           else flats.current.delete(l.id)
         }}
-        style={l.kind === "cursor" ? { ...style, width: 0 } : style}
+        style={l.kind === "cursor" ? { ...style, width: 0 } : l.kind === "image" && l.blend ? { ...style, mixBlendMode: l.blend } : style}
       >
         {inner}
       </div>
