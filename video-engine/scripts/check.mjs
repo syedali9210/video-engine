@@ -897,4 +897,86 @@ function Nav() { return <nav><a href="/">Home</a><a href="/t">Traces</a></nav> }
   assert.equal(pick(lib, { hue: 20, dark: false, tone: "bold", words: "food delivery" })[0].img.id, "ember");
 }
 
+// the guardrails: every film is judged; nothing leaves before it's done, words get reading time, the camera stays in
+// bounds, backdrops keep the brand's hue, components are built piece by piece
+{
+  const { fitted, SOFT_MORPH } = await import("../src/studio/flow.ts");
+  const { compose, review, doneOf } = await import("../src/studio/compose.ts");
+  const { judge, TASTE } = await import("../src/studio/guardrails.ts");
+  const { backdropFor, backdropColors } = await import("../src/studio/backdrop.ts");
+  const { shotFor, shotKeys, ANGLES } = await import("../src/studio/camera.ts");
+  const { assemble, rowsOf } = await import("../src/studio/assemble.ts");
+  const { STYLES } = await import("../src/studio/styles.ts");
+  const { lch } = await import("../src/theme.ts");
+  const P = (id, kind, x, y, w, h, extra = {}) => ({ id, kind, x, y, w, h, depth: 0, up: -1, ...extra });
+  const parts = [
+    P(0, "text", 20, 16, 120, 22, { text: "Export", size: 18 }),
+    P(1, "divider", 0, 50, 320, 1),
+    P(2, "text", 20, 70, 60, 16, { text: "Size", size: 13 }),
+    P(3, "button", 180, 66, 120, 26, { text: "16:9 · 1920×1080" }),
+    P(4, "text", 20, 110, 90, 16, { text: "Motion blur", size: 13 }),
+    P(5, "control", 260, 108, 40, 22),
+    P(6, "button", 20, 160, 280, 40, { text: "Export video", primary: true }),
+  ];
+  const base = { name: "Probe", accent: "#3d5afe", pace: SOFT_MORPH, motion: "tour", scenes: [
+    { kind: "words", text: "Every launch deserves a film, made from the product itself.", dur: 1, ground: { tone: "dark" } },
+    { kind: "brand", name: "Probe", dur: 1, ground: { tone: "white" } },
+    { kind: "component", src: "/x.html", w: 320, h: 220, parts, press: "Export video", dur: 1, ground: { tone: "dark" } },
+    { kind: "cards", cards: [{ tag: "A", lines: ["one"] }, { tag: "B", lines: ["two"] }], dur: 1, ground: { tone: "dark" } },
+    { kind: "end", lead: "launch it", tail: "today", name: "Probe", dur: 1, ground: { tone: "field", variant: "diagonal" } },
+  ] };
+  // fitted, every scene is done (and has held) before its way out starts, and the judge passes it
+  const f = fitted(base);
+  const { graph: g, verdict } = review(f);
+  assert.ok(verdict.pass, verdict.findings.map((x) => x.text).join("; "));
+  assert.ok(!verdict.findings.some((x) => x.rule === "complete" || x.rule === "camera" || x.rule === "colour"), verdict.findings.map((x) => x.text).join("; "));
+  // too short by hand (and forced), the judge says so: what's still animating when it leaves
+  const cut = { ...f, scenes: f.scenes.map((s, i) => (i === 2 ? { ...s, dur: 1.2 } : s)) };
+  const v2 = review(cut).verdict;
+  assert.ok(!v2.pass && v2.findings.some((x) => x.rule === "complete" && x.scene === 2));
+  // a drift that lasts until the scene leaves isn't choreography; a step anchored to the start is
+  const o = { els: [{ id: "a", kind: "text", a: 0, b: 9, z: 1, keys: [{ t: 0.2 }, { t: 1.4, reveal: 1 }, { t: 8, s: 1.03, amb: true }] }], done: 0.5 };
+  const again = { els: [{ id: "a", kind: "text", a: 0, b: 39, z: 1, keys: [{ t: 0.2 }, { t: 1.4, reveal: 1 }, { t: 38, s: 1.03, amb: true }] }], done: 0.5 };
+  assert.equal(doneOf(o, again), 1.4);
+  // words alone stand on moving graphics in the brand's hue, quiet where the words are
+  const bds = [...new Map(g.grounds.filter((x) => x.g.motion).map((x) => [x.g.motion.t0, x.g.motion])).values()];
+  assert.ok(bds.length >= 2 && new Set(bds.map((b) => b.kind)).size === bds.length, bds.map((b) => b.kind).join());
+  const hue = lch("#3d5afe").h;
+  for (const c of backdropColors("#3d5afe", true)) assert.ok(Math.abs(((lch(c).h - hue + 540) % 360) - 180) <= TASTE.hues, c);
+  assert.equal(backdropFor({ accent: "#3d5afe", dark: true, style: "kinetic", words: "a developer API", seed: 0 }).kind, "grid");
+  // shots: every angle within the camera's bounds; a still scene takes one, and not the one before
+  for (const a of Object.values(ANGLES)) assert.ok(Math.abs(a.rx) <= TASTE.camera.rx && Math.abs(a.ry) <= TASTE.camera.ry && Math.abs(a.rz) <= TASTE.camera.rz);
+  const s1 = shotFor("words", STYLES.soft, 0);
+  assert.ok(s1 && shotFor("words", STYLES.soft, 0, s1, [s1.angle]).angle !== s1.angle);
+  // no angle twice in a film, product scenes' own cameras included
+  const seenAs = g.angles.filter(Boolean);
+  assert.equal(new Set(seenAs).size, seenAs.length, seenAs.join());
+  // a gradient is one family: no composed field's colour turns far from the brand's hue (a blue brand's never goes pink)
+  const { composedField } = await import("../src/studio/field.ts");
+  for (const acc of ["#3d5afe", "#e5484d", "#30a46c"])
+    for (const variant of ["diagonal", "mirror", "horizon", "spot"])
+      for (const b of composedField(acc, { variant }).blobs) {
+        const l = lch(b.color);
+        if (l.c > 0.03) assert.ok(Math.abs(((l.h - lch(acc).h + 540) % 360) - 180) <= TASTE.hues, `${acc} ${variant} ${b.role} ${b.color}`);
+      }
+  const ks = shotKeys(STYLES.kinetic, 1, 3, { x: 960, y: 540, z: 1 }, { angle: "dutchL", move: "roll" });
+  assert.ok(ks[0].rz < 0 && Math.abs(ks[1].rz) < Math.abs(ks[0].rz));
+  // the assembly: rows top to bottom, left to right; the title typed first; the button asked for pressed last
+  const rows = rowsOf(parts);
+  assert.deepEqual(rows.map((r) => r.parts.map((p) => p.id)), [[0], [1], [2, 3], [4, 5], [6]]);
+  const a = assemble(parts, { w: 320, h: 220, t0: 1, style: STYLES.cta, cps: 75 });
+  const step = (id) => a.steps.find((s) => s.id === id);
+  assert.equal(step(0).how, "type");
+  assert.equal(step(1).how, "line");
+  assert.equal(step(3).how, "form");
+  assert.ok(step(2).at < step(4).at && step(4).at < step(6).at && step(2).at <= step(3).at);
+  assert.equal(a.press.id, 6);
+  assert.ok(a.press.at > Math.max(...a.steps.map((s) => s.at + s.len)) - 1e-9 && a.end > a.press.at);
+  assert.ok(a.grow.every((x, i) => !i || x[0] > a.grow[i - 1][0]), "the outline grows in time order");
+  // and in the film, the component scene lasts until it's built and pressed
+  const comp = g.els.find((e) => e.kind === "assembly");
+  const S2 = f.scenes.slice(0, 2).reduce((n, s) => n + s.dur, 0);
+  assert.ok(comp.c.a.end <= S2 + f.scenes[2].dur, `${comp.c.a.end} > ${S2 + f.scenes[2].dur}`);
+}
+
 console.log("check: ok");

@@ -9,7 +9,9 @@
     "check": "node scripts/check.mjs",
     "posters": "node scripts/posters.mjs",
     "templates": "node scripts/templates.mjs",
-    "measure": "node scripts/measure.mjs"
+    "measure": "node scripts/measure.mjs",
+    "film": "node scripts/film.mjs",
+    "shoot": "node scripts/shoot.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

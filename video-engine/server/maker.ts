@@ -30,8 +30,10 @@
 //   POST /__film/panel-snapshot { html }        a panel frozen elsewhere (the capture pasted in a browser) -> { src }
 //   POST /__film/review { id }                  stills of a film, its scorecard and its cross-check
 //   GET  /__film/assets · POST /__film/asset { kit, kind: world|mark|shape, id? }   the generator (server/generate.ts)
-//   POST /__film/flow { flow, name?, mood?, size? }  a flow written by hand (src/studio/flow.ts), no kit needed: fitted
-//                                               to its choreography and made into a film -> { id, length, scenes }
+//   POST /__film/flow { flow, name?, mood?, size?, dry?, force? }  a flow written by hand (src/studio/flow.ts), no kit
+//                                               needed: fitted to its choreography, judged against the guardrails
+//                                               (422 with the findings if it breaks one), made into a film
+//                                               -> { id, length, scenes, verdict } (dry: judged only)
 //   GET  /__film/media/<name>                    a recording, a captured panel or a picture placed in a film
 //   POST /__film/sequence { kit, parts: [{ template, shots?, screens? }], size?, length?, mood?, seam? }
 //                                               one film from several templates' shots
@@ -431,16 +433,18 @@ export function maker(): Plugin {
       }
 
       /** A frozen panel kept with the films' media (its address is what the unfold film fetches). */
-      function keepSnapshot(html: string) {
+      /** a frozen component kept (and its parts' manifest beside it, when it has one: what the assembly builds from) */
+      function keepSnapshot(html: string, meta?: { w?: number; h?: number; bg?: string; parts?: unknown[] }) {
         const name = `panel-${createHash("sha1").update(html).digest("hex").slice(0, 16)}.html`
         mkdirSync(media, { recursive: true })
         writeFileSync(join(media, name), html)
+        if (meta?.parts?.length) writeFileSync(join(media, name.replace(/\.html$/, ".json")), JSON.stringify({ w: meta.w, h: meta.h, bg: meta.bg, parts: meta.parts }))
         return `/__film/media/${name}`
       }
       /** The product's own panel, frozen from its running app: the page opened in headless Chrome, the panel found by
           its words (its title, its properties' labels, its buttons), every element's look inlined. Looks on the page it's
           given, then on up to six of that page's own links whose words share the panel's. */
-      async function capturePanel(url: string, p: PanelT, card?: string): Promise<{ src?: string; found?: unknown; error?: string; bg?: string; w?: number; h?: number }> {
+      async function capturePanel(url: string, p: PanelT, card?: string): Promise<{ src?: string; found?: unknown; error?: string; bg?: string; w?: number; h?: number; parts?: unknown[] }> {
         const chrome = findChrome()
         if (!chrome) return { error: "No Chrome or Edge to open the app in (STUDIO_CHROME)." }
         const profile = mkdtempSync(join(tmpdir(), "anim-engine-chrome-panel-"))
@@ -452,7 +456,7 @@ export function maker(): Plugin {
           for (let i = 0; i < 200 && !(await cdp.evaluate("document.readyState === 'complete'").catch(() => false)); i++) await sleep(100)
           await sleep(1500)
           await cdp.evaluate(script)
-          return (await cdp.evaluate(card ? `window.__captureCard(${JSON.stringify({ text: card })})` : `window.__capturePanel(${spec})`, 60000)) as { html?: string; w?: number; h?: number; found?: unknown; error?: string; bg?: string }
+          return (await cdp.evaluate(card ? `window.__captureCard(${JSON.stringify({ text: card })})` : `window.__capturePanel(${spec})`, 60000)) as { html?: string; w?: number; h?: number; found?: unknown; error?: string; bg?: string; parts?: unknown[] }
         }
         try {
           await cdp.send("Page.enable")
@@ -468,7 +472,7 @@ export function maker(): Plugin {
               .slice(0, 6)
             for (const l of ranked) if ((r = await open(l.h)).html) break
           }
-          return r.html ? { src: keepSnapshot(r.html), found: r.found, bg: r.bg, w: r.w, h: r.h } : { error: r.error ?? "Not found" }
+          return r.html ? { src: keepSnapshot(r.html, { w: r.w, h: r.h, bg: r.bg, parts: r.parts }), found: r.found, bg: r.bg, w: r.w, h: r.h, parts: r.parts } : { error: r.error ?? "Not found" }
         } catch (e) {
           return { error: (e as Error).message }
         } finally {
@@ -539,7 +543,8 @@ export function maker(): Plugin {
         if (cast.length && k.url) {
           t0 = Date.now()
           const got = await Promise.all(cast.map(async (c) => ({ c, r: await capturePanel(k.url!, c.panel!) })))
-          for (const { c, r } of got) if (r.src) c.panel = { ...c.panel!, src: r.src, ...(r.bg ? { surface: r.bg } : {}) }
+          // (with its parts marked, so the flow film builds it piece by piece: assemble.ts)
+          for (const { c, r } of got) if (r.src) c.panel = { ...c.panel!, src: r.src, ...(r.bg ? { surface: r.bg } : {}), ...(r.parts?.length && r.w && r.h ? { parts: r.parts, w: r.w, h: r.h } : {}) } as typeof c.panel
           step(log, "panels captured", t0, null, got.map(({ c, r }) => `${c.panel!.title}: ${r.src ? "the app's own" : `drawn (${r.error})`}`).join("; "))
         }
         if (o.flow) return directFlow(o, k, brief, spine, carriers, ad, dark, log, length)
@@ -974,13 +979,27 @@ export function maker(): Plugin {
             const { FL } = await mods()
             const fl = body.flow as FlowT | undefined
             if (!fl?.scenes?.length || !fl.name || !fl.accent) return json(res, 400, { error: "Give the flow: { name, accent, scenes: [...] } (src/studio/flow.ts)." })
+            // a component given by its snapshot alone takes its size and parts from the manifest kept beside it
+            fl.scenes = fl.scenes.map((sc) => {
+              const c = sc as unknown as { kind: string; src?: string; parts?: unknown[]; w?: number; h?: number }
+              if (c.kind !== "component" || !c.src || (c.parts?.length && c.w && c.h)) return sc
+              const file = join(media, (c.src.split("/").pop() ?? "").replace(/\.html$/, ".json"))
+              if (!existsSync(file)) return sc
+              const m = JSON.parse(readFileSync(file, "utf8")) as { w: number; h: number; parts: unknown[] }
+              return { ...sc, w: c.w ?? m.w, h: c.h ?? m.h, parts: c.parts?.length ? c.parts : m.parts } as typeof sc
+            })
             const flow = FL.fitted({ ...fl, pace: fl.pace ?? FL.SOFT_MORPH })
+            // held to the guardrails before anything is made (src/studio/guardrails.ts): an error stops it unless forced
+            const CO = (await server.ssrLoadModule("/src/studio/compose.ts")) as { review: (f: FlowT) => { verdict: { pass: boolean; findings: { rule: string; level: string; text: string }[] } } }
+            const { verdict } = CO.review(flow)
+            if (!verdict.pass && !body.force) return json(res, 422, { error: "The film breaks the guardrails.", verdict })
+            if (body.dry) return json(res, 200, { id: null, length: FL.lengthOf(flow), scenes: flow.scenes.map((s) => ({ kind: s.kind, dur: s.dur })), verdict })
             const t0 = Date.now()
             const log: Stage[] = []
             const f = await filmOfFlow(flow, { name: String(body.name ?? fl.name), summary: String(body.summary ?? ""), size: body.size as string | undefined, mood: body.mood as string | undefined, log })
             step(log, "flow", t0, null, `${flow.scenes.length} scenes (${flow.scenes.map((s) => s.kind).join(" → ")}), ${FL.lengthOf(flow).toFixed(1)} s`)
             save(f)
-            return json(res, 200, { id: f.id, length: FL.lengthOf(flow), scenes: flow.scenes.map((s) => ({ kind: s.kind, dur: s.dur })) })
+            return json(res, 200, { id: f.id, length: FL.lengthOf(flow), scenes: flow.scenes.map((s) => ({ kind: s.kind, dur: s.dur })), verdict })
           }
           if (what === "review") return json(res, 200, await review(get(body.id)))
           if (what === "panel-capture") {
@@ -996,7 +1015,8 @@ export function maker(): Plugin {
           if (what === "panel-snapshot") {
             const html = String(body.html ?? "")
             if (!html.includes("data-unfold-root") || html.length > 8e6) return json(res, 400, { error: "Not a captured panel (public/panel-capture.js makes one)." })
-            return json(res, 200, { src: keepSnapshot(html) })
+            const parts = Array.isArray(body.parts) ? body.parts : undefined
+            return json(res, 200, { src: keepSnapshot(html, { w: Number(body.w) || undefined, h: Number(body.h) || undefined, bg: body.bg as string | undefined, parts }), parts: parts?.length ?? 0 })
           }
           // the panels a directed film could build, found in the product's code
           if (what === "panels") {
@@ -1016,7 +1036,7 @@ export function maker(): Plugin {
           }
           if (what.startsWith("media/")) {
             const name = what.slice("media/".length)
-            const types: Record<string, string> = { mp4: "video/mp4", html: "text/html; charset=utf-8", png: "image/png", jpg: "image/jpeg", webp: "image/webp", svg: "image/svg+xml" }
+            const types: Record<string, string> = { mp4: "video/mp4", html: "text/html; charset=utf-8", png: "image/png", jpg: "image/jpeg", webp: "image/webp", svg: "image/svg+xml", json: "application/json" }
             const ext = name.split(".").pop() ?? ""
             if (!/^[\w-]+\.\w+$/.test(name) || !types[ext] || !existsSync(join(media, name))) return json(res, 404, { error: "No such file" })
             return sendFile(req, res, join(media, name), types[ext])

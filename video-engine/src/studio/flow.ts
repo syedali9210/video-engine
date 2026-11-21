@@ -10,10 +10,12 @@ import type { Beat, Carrier, Meaning, Spine } from "./screenplay.ts"
 import type { Composition } from "./field.ts"
 import type { Panel } from "./panels.ts"
 import type { Profile } from "./pace.ts"
+import type { Part } from "./assemble.ts"
 import { fit, type Style, type Tone } from "./compose.ts"
 
 /** `image`: a picture of the library's (images.ts), chosen for the product; `ink` the words' colour on it */
-export type Ground = { tone: "field"; variant: Composition; grain?: number } | { tone: "white" } | { tone: "dark" } | { tone: "light" } | { tone: "image"; src: string; ink?: string; focus?: { x: number; y: number } }
+/** `motion`: moving graphics over it under words alone (the generator gives text scenes one: backdrop.ts) */
+export type Ground = ({ tone: "field"; variant: Composition; grain?: number; finish?: "satin" | "matte" } | { tone: "white" } | { tone: "dark" } | { tone: "light" } | { tone: "image"; src: string; ink?: string; focus?: { x: number; y: number } }) & { motion?: import("./graph.ts").Backdrop }
 /** a card the film shows (a post, a message, a result): drawn from its words, or the product's own, captured (`src`,
     `h` its height drawn 900 px wide) */
 export type Card = { by?: string; handle?: string; tag?: string; lines: string[]; src?: string; h?: number }
@@ -24,6 +26,9 @@ export type FlowScene = Base &
     | { kind: "prompt"; lead: string; tail: string; typed: string }
     | { kind: "brand"; name: string; logo?: string }
     | { kind: "panel"; panel: Pick<Panel, "title" | "rows" | "ctas" | "src"> & { surface?: string } }
+    /** a component of the product's own, captured whole (its parts marked: public/panel-capture.js), built piece by
+        piece (assemble.ts); `w`, `h` its size, `press` the words on the button to press (else its primary one) */
+    | { kind: "component"; src: string; w: number; h: number; parts: Part[]; press?: string; radius?: number }
     | { kind: "app"; media: string; icon?: string; focus?: { x: number; y: number }; aspect?: number }
     | { kind: "tour"; media: string; aspect?: number; stops?: { x: number; y: number; z?: number }[]; press?: { x: number; y: number } }
     | { kind: "orbit"; items: string[]; name: string; logo?: string }
@@ -58,6 +63,8 @@ export function minimum(s: FlowScene, p: Pace) {
       return T + 2.15
     case "panel":
       return T + 5.4
+    case "component":
+      return T + 2.2 + Math.min(4.5, s.parts.length * 0.09)
     case "app":
       return T + 2.9
     case "cards":
@@ -115,7 +122,9 @@ export function flowFromSpine(sp: Spine, carriers: Carrier[], o: { name: string;
       if (o.orbit?.length) scenes.push({ kind: "orbit", items: o.orbit.slice(0, 8), name: o.name, logo: o.logo, dur: 0, ground: { tone: "white" }, meaning: { ...meaning(x, `what ${o.name} works with, orbiting its mark: ${o.orbit.join(", ")}`), buys: `Buys reach: ${o.name} works with what they already use.` } })
     } else if (c?.kind === "panel" && c.panel) {
       proofs++
-      scenes.push({ kind: "panel", panel: { title: c.panel.title, rows: c.panel.rows, ctas: c.panel.ctas, ...(c.panel.src ? { src: c.panel.src } : {}), ...(c.panel.surface ? { surface: c.panel.surface } : {}) }, dur: x.seconds, ground: { tone: "dark" }, meaning: meaning(x, c.what) })
+      // captured with its parts: built piece by piece (assemble.ts); else the unfold of its title, rows and buttons
+      if (c.panel.src && c.panel.parts?.length && c.panel.w && c.panel.h) scenes.push({ kind: "component", src: c.panel.src, w: c.panel.w, h: c.panel.h, parts: c.panel.parts, ...(c.panel.ctas[0] ? { press: c.panel.ctas[0] } : {}), dur: x.seconds, ground: { tone: "dark" }, meaning: meaning(x, c.what) })
+      else scenes.push({ kind: "panel", panel: { title: c.panel.title, rows: c.panel.rows, ctas: c.panel.ctas, ...(c.panel.src ? { src: c.panel.src } : {}), ...(c.panel.surface ? { surface: c.panel.surface } : {}) }, dur: x.seconds, ground: { tone: "dark" }, meaning: meaning(x, c.what) })
     } else if (c?.kind === "device" && c.file && !c.phone && o.tone !== "calm" && proofs > 0) {
       // a desktop screen after the first: toured, the camera snapping from part to part and going close on what's pressed
       proofs++

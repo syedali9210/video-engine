@@ -9,7 +9,7 @@
 // Plain data and no DOM: the dev server and `npm run check` run it.
 
 /** `src`: the product's own panel, frozen from its running app (public/panel-capture.js), when it's been captured */
-export type Panel = { id: string; title: string; rows: string[]; ctas: string[]; file: string; component?: string; src?: string; /** its ground, when captured (what a flow film's shape becomes it through) */ surface?: string }
+export type Panel = { id: string; title: string; rows: string[]; ctas: string[]; file: string; component?: string; src?: string; /** its ground, when captured (what a flow film's shape becomes it through) */ surface?: string; /** when captured with its parts marked: them, and its size (a flow film builds it piece by piece: assemble.ts) */ parts?: import("./assemble.ts").Part[]; w?: number; h?: number }
 
 /* ---------------- reading code ---------------- */
 

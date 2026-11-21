@@ -52,13 +52,13 @@ export default function FlowFilm({ p = defaults }: { p?: Params }) {
       const G = P.G;
       const [x, y, z] = target(G, zooms(G), buildClock(s.build));
       const k = s.w / G.pill.h;
-      return { x: s.x + (x - (G.pill.left + G.pill.h / 2)) * k, y: s.y + (y - (G.pill.top + G.pill.h / 2)) * k, z: z / k, rx: 0, ry: 0 };
+      return { x: s.x + (x - (G.pill.left + G.pill.h / 2)) * k, y: s.y + (y - (G.pill.top + G.pill.h / 2)) * k, z: z / k, rx: 0, ry: 0, rz: 0 };
     },
     [tr],
   );
   const v = camAt(g.cam, t, focus, g.lag);
   const v0 = camAt(g.cam, Math.max(0, t - 1 / 60), focus, g.lag);
-  const world = `translate(${W0 / 2}px, ${H0 / 2}px) rotateX(${v.rx}deg) rotateY(${v.ry}deg) scale(${v.z}) translate(${-v.x}px, ${-v.y}px)`;
+  const world = `translate(${W0 / 2}px, ${H0 / 2}px) rotateZ(${v.rz}deg) rotateX(${v.rx}deg) rotateY(${v.ry}deg) scale(${v.z}) translate(${-v.x}px, ${-v.y}px)`;
   const shift = { x: -(v.x - W0 / 2) * 0.06 * v.z, y: -(v.y - H0 / 2) * 0.06 * v.z };
   const live = alive(g, t);
   // motion blur: how far an element moved on screen since the frame before (a little, only when it's fast). What the
@@ -68,17 +68,22 @@ export default function FlowFilm({ p = defaults }: { p?: Params }) {
     const k = tr.get(e.id)!;
     const a = sample(k, t);
     const b = sample(k, Math.max(0, t - 1 / 60));
-    const own = e.id === tracked;
-    const sx = own ? (a.x - b.x) * v.z : (a.x - v.x) * v.z - (b.x - v0.x) * v0.z;
-    const sy = own ? (a.y - b.y) * v.z : (a.y - v.y) * v.z - (b.y - v0.y) * v0.z;
-    const ds = own ? Math.abs(a.w - b.w) * v.z : Math.abs(a.w * v.z - b.w * v0.z);
+    // (a component being built is what the camera is on all through its scene: tracked too)
+    const own = e.id === tracked || e.kind === "assembly";
+    // (what's the camera's own move counts for a third: a camera easing between framings shouldn't smear what it
+    // shows; a thing that moves itself blurs by its whole speed)
+    const ox = (a.x - b.x) * v.z;
+    const oy = (a.y - b.y) * v.z;
+    const sx = own ? ox : ox + ((a.x - v.x) * v.z - (b.x - v0.x) * v0.z - ox) * 0.35;
+    const sy = own ? oy : oy + ((a.y - v.y) * v.z - (b.y - v0.y) * v0.z - oy) * 0.35;
+    const ds = own ? Math.abs(a.w - b.w) * v.z : Math.abs(a.w - b.w) * v.z + Math.abs(a.w * v.z - b.w * v0.z - (a.w - b.w) * v.z) * 0.35;
     return Math.min(5, Math.max(0, (Math.hypot(sx, sy) + ds * 0.5 - 6) * 0.12));
   };
   return (
     <Stage background="#000">
       {groundsAt(g.grounds, t).map(({ g: gr, k }, i) => (
         <div key={`g${i}-${JSON.stringify(gr)}`} style={{ position: "absolute", inset: 0, opacity: k }}>
-          <GroundView g={gr} t={t} accent={g.accent} shift={shift} />
+          <GroundView g={gr} t={t} accent={g.accent} shift={shift} cam={v} />
         </div>
       ))}
       {panelEls.map((e) => (

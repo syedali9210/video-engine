@@ -22,10 +22,12 @@ export const BASE: P = { x: 960, y: 540, w: 100, h: 100, r: 0, o: 1, co: 1, blur
     then settling: expo), `in` (slow, then fast), `inOut` (strong both ends), `snap` (there almost at once, then a
     long settle), `back` (past it and back), `linear`, `hold` (stays, then jumps at the key) */
 export type Ease = "smooth" | "out" | "in" | "inOut" | "snap" | "back" | "linear" | "hold"
-export type Key = { t: number; e?: Ease } & Partial<P>
+/** `amb`: an ambient key (a drift that lasts until the scene leaves, a spin carrying into the cut), not a step of the
+    scene's choreography: what a scene must finish before it leaves never counts it (compose.ts doneOf) */
+export type Key = { t: number; e?: Ease; amb?: boolean } & Partial<P>
 
 export type Text = { text: string; size: number; weight?: number; color?: string; align?: "left" | "center" | "right"; top?: boolean; width?: number; tail?: string }
-export type ElKind = "box" | "text" | "mark" | "icon" | "media" | "card" | "panel" | "send" | "cursor" | "chip" | "ring" | "glow"
+export type ElKind = "box" | "text" | "mark" | "icon" | "media" | "card" | "panel" | "send" | "cursor" | "chip" | "ring" | "glow" | "assembly"
 export type El = {
   id: string
   kind: ElKind
@@ -42,8 +44,16 @@ export type El = {
 }
 /** where the camera looks (world px), how close, how it's turned; `follow`: from this key to the next it follows an
     element (a panel being built: its growing edge), `lag`: how far behind it trails (s) */
-export type CamKey = { t: number; x?: number; y?: number; z?: number; rx?: number; ry?: number; follow?: string; e?: Ease }
-export type Ground = { tone: "field"; variant: string; grain?: number } | { tone: "white" } | { tone: "dark" } | { tone: "light" } | { tone: "image"; src: string; ink?: string; focus?: { x: number; y: number } }
+export type CamKey = { t: number; x?: number; y?: number; z?: number; rx?: number; ry?: number; rz?: number; follow?: string; e?: Ease }
+export const BACKDROPS = ["orbs", "ribbons", "grid", "rings", "streaks", "dust", "contours"] as const
+export type BackdropKind = (typeof BACKDROPS)[number]
+/** moving graphics behind words alone (backdrop.ts chooses them, _film/backdrop.tsx draws them): which, in what
+    colours, how fast, the moments the words land (`beats`), where the words are (`quiet`: a fraction of the frame),
+    how strong, from when */
+export type Backdrop = { kind: BackdropKind; colors: string[]; dark: boolean; speed: number; seed: number; beats: number[]; quiet: { x: number; y: number; w: number; h: number }; amount: number; t0: number }
+/** `motion`: moving graphics over a ground under words alone */
+/** a field's `finish`: satin (the default: folds, sheen and a weave) or matte (the plain composed field) */
+export type Ground = ({ tone: "field"; variant: string; grain?: number; finish?: "satin" | "matte" } | { tone: "white" } | { tone: "dark" } | { tone: "light" } | { tone: "image"; src: string; ink?: string; focus?: { x: number; y: number } }) & { motion?: Backdrop }
 /** a ground from `t`, blended in over `blend` s (0: at once: under an iris that already covers the frame) */
 export type GroundKey = { t: number; g: Ground; blend: number }
 export type Cut = { t: number; name: string; kind: string; transition: string; meaning?: unknown }
@@ -148,7 +158,8 @@ export function sample(tr: Tracks, t: number): P {
 
 /* ---------------- the camera ---------------- */
 
-export type View = { x: number; y: number; z: number; rx: number; ry: number }
+/** `rz`: the camera's roll (deg) */
+export type View = { x: number; y: number; z: number; rx: number; ry: number; rz: number }
 /** Where the camera wants to be at t: its keys, one curve each; between a `follow` key and the next, the followed
     element's focus (`focus(id, t)`, the renderer's: it knows a panel's measured edges), eased in and out of. */
 export function camTarget(cam: CamKey[], t: number, focus?: (id: string, t: number) => View | null): View {
@@ -157,7 +168,7 @@ export function camTarget(cam: CamKey[], t: number, focus?: (id: string, t: numb
     const k = ks.filter((x) => x[p] !== undefined).map((x) => [x.t, x[p] as number, x.e] as [number, number, Ease?])
     return k.length ? curve(t, k) : d
   }
-  const v: View = { x: pick("x", 960), y: pick("y", 540), z: pick("z", 1), rx: pick("rx", 0), ry: pick("ry", 0) }
+  const v: View = { x: pick("x", 960), y: pick("y", 540), z: pick("z", 1), rx: pick("rx", 0), ry: pick("ry", 0), rz: pick("rz", 0) }
   // a follow lasts until the next key that places the camera (one that only turns it doesn't end it)
   const placing = ks.filter((x) => x.x !== undefined || x.y !== undefined || x.follow)
   for (let j = 0; j < placing.length; j++) {
@@ -190,7 +201,7 @@ export function followed(cam: CamKey[], t: number): string | null {
     most; 0: on its path exactly, every snap a snap). Pure in t. */
 export function camAt(cam: CamKey[], t: number, focus?: (id: string, t: number) => View | null, lag = 0.26): View {
   if (lag <= 0.005) return camTarget(cam, t, focus)
-  const acc: View = { x: 0, y: 0, z: 0, rx: 0, ry: 0 }
+  const acc: View = { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 }
   let sw = 0
   const step = lag / 11
   for (let i = 0; i < 12; i++) {

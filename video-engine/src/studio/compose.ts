@@ -21,7 +21,10 @@ import { composedField } from "./field.ts"
 import type { Card, Flow, FlowScene, Ground } from "./flow.ts"
 import type { CamKey, Cut, DofKey, Ease, El, Graph, GroundKey, Key } from "./graph.ts"
 import { STYLES, styleFor, type Cut as CutKind, type MotionStyle } from "./styles.ts"
-import { atCut, inScene, layer, onFocus, type Focus, type Framing } from "./camera.ts"
+import { ANGLES, angleFor, atCut, inScene, layer, onFocus, shotEnd, shotFor, shotKeys, shotStart, type Angle, type Focus, type Framing, type Shot } from "./camera.ts"
+import { assemble } from "./assemble.ts"
+import { backdropFor, type BackdropKind } from "./backdrop.ts"
+import { TASTE, judge, type Verdict } from "./guardrails.ts"
 
 export type Transition = CutKind
 export const TRANSITIONS: Transition[] = ["morph", "iris", "push", "blur", "slide", "snap", "dot", "wipe", "sweep"]
@@ -34,6 +37,7 @@ export const VARIANTS: Record<FlowScene["kind"], string[]> = {
   prompt: ["between", "center"],
   brand: ["dot", "rise"],
   panel: ["unfold"],
+  component: ["assemble"],
   app: ["icon", "fly"],
   tour: ["tour"],
   orbit: ["orbit"],
@@ -162,7 +166,8 @@ type Out = {
   /** where its last line ends (a dot can grow from there) */
   lineEnd?: { x: number; y: number }
 }
-type Ctx = { i: number; S: number; E: number; T: number; v: string; f: Flow; st: MotionStyle; ink: string; quiet: string; tin: Transition | null; tout: Transition | null }
+/** `angle`: the angle a product scene's own camera takes (camera.ts angleFor: none the film has used) */
+type Ctx = { i: number; S: number; E: number; T: number; v: string; f: Flow; st: MotionStyle; ink: string; quiet: string; tin: Transition | null; tout: Transition | null; angle?: Angle }
 const el = (id: string, kind: El["kind"], a: number, b: number, z: number, keys: Key[], c?: El["c"]): El => ({ id, kind, a, b, z, keys, ...(c ? { c } : {}) })
 const REST: Framing = { x: CX, y: CY, z: 1, rx: 0, ry: 0 }
 const inkOn = (g: Ground, ink: string) => (g.tone === "image" ? (g.ink ?? WHITE) : g.tone === "white" || g.tone === "light" ? INK : ink)
@@ -210,7 +215,7 @@ function words(s: Extract<FlowScene, { kind: "words" }>, x: Ctx): Out {
     keys.push({ t: S - T / 4, reveal: 0 }, { t: S - T / 4 + len / cps, reveal: 1 })
   }
   const settled = x.v === "pullback" ? (x.i === 0 ? 0.15 : S) + 0.95 : S + T / 2
-  keys.push({ t: settled, s: 1 }, { t: E + T / 2, s: 1.03 })
+  keys.push({ t: settled, s: 1 }, { t: E + T / 2, s: 1.03, amb: true })
   return { els: [el(id, "text", S - T / 2, E + T / 2, 10, keys, c)], cam: [{ t: S + T / 2, ...REST }], dof: [{ t: S, k: 0 }], enter: [id], leave: [id], done, frame: REST, still: true, lineEnd: { x: CX - w / 2 + w + 18, y: CY - 4 } }
 }
 
@@ -262,8 +267,11 @@ function prompt(s: Extract<FlowScene, { kind: "prompt" }>, x: Ctx): Out {
     out: { id: box, shape: { x: CX, y: CY, w: bw, h: bh, r: 38, fill: WHITE } },
     enter,
     leave: [send, ty, ...enter],
-    done: t1,
+    // (the newest letters settle a few letters' time after the last is typed)
+    done: t1 + 9 / (f.pace.typeCps * st.speed),
     frame: REST,
+    // (seen from an angle of its own, as a shot, the close-up on the typing over it)
+    still: true,
     focus: [{ t: t0, until: t1 + 0.25, x: CX, y: CY, w: bw + 180, h: bh, kind: "type" }],
   }
 }
@@ -316,13 +324,56 @@ function panel(s: Extract<FlowScene, { kind: "panel" }>, x: Ctx): Out {
   const carried = x.tin === "morph"
   return {
     els: [el(id, "panel", carried ? o : S - T / 2, E + T / 2, 20, [{ t: S - T / 2, x: CX, y: CY, w: 236, o: carried ? 1 : 0, blur: carried ? 0 : 8 }, { t: o, o: 1, blur: 0 }, ...build], { panel: s.panel })],
-    cam: [{ t: o, ...REST, follow: id }, { t: o + 0.8, rx: 7, ry: -12 }, { t: o + bd, rx: 6, ry: -10 }],
+    cam: [{ t: o, ...REST, follow: id }, { t: o + 0.8, rx: (x.angle?.rx ?? 5) + 2, ry: x.angle?.ry ?? -12 }, { t: o + bd, rx: (x.angle?.rx ?? 5) + 1, ry: (x.angle?.ry ?? -12) * 0.85 }],
     dof: [{ t: o, k: 0 }, { t: o + 1.5, k: 0.55 }, { t: o + bd, k: 0.55 }, { t: E + T / 2, k: 0 }],
     enter: carried ? [] : [id],
     leave: [id],
     done: o + bd,
     frame: REST,
   }
+}
+
+/** a component of the product's own built piece by piece (assemble.ts), the camera on each row as it builds (at an
+    angle, the way it follows a panel), then back to the whole of it; then its button pressed */
+function component(s: Extract<FlowScene, { kind: "component" }>, x: Ctx): Out {
+  const { S, E, T, st } = x
+  const o = S + T / 2
+  const id = `cp${x.i}`
+  // its size in the world: as big as fits comfortably at rest
+  const ws = Math.min(1080 / s.w, 760 / s.h, 2.6)
+  const cw = s.w * ws
+  const chh = s.h * ws
+  const budget = Math.max(2, E - o - 1.2)
+  const a = assemble(s.parts, { w: s.w, h: s.h, t0: o + 0.05, style: st, cps: x.f.pace.typeCps * st.speed, budget, press: s.press, radius: s.radius })
+  const wx = (px: number) => CX - cw / 2 + px * ws
+  const wy = (py: number) => CY - chh / 2 + py * ws
+  const fit = (w: number, h: number) => Math.max(1, Math.min(TASTE.camera.zMax * 0.5, (0.6 * W) / Math.max(1, w * ws), (0.42 * H) / Math.max(1, h * ws)))
+  const out: Ease = st.ease.cam === "smooth" ? "smooth" : "out"
+  // the camera: on each row as it starts (every other one when there are many), turned a little, alternating sides
+  const rows = a.rows.length > 7 ? a.rows.filter((_, i) => i % 2 === 0 || i === a.rows.length - 1) : a.rows
+  const ang = x.angle ?? ANGLES.threeQuarterL
+  const cam: CamKey[] = []
+  rows.forEach((r, i) => {
+    const z = Math.min(fit(Math.max(r.w, s.w * 0.55), r.h), 3.2)
+    cam.push({ t: r.at + (i ? 0.05 : -0.05), x: wx(r.x + r.w / 2), y: wy(r.y + r.h / 2), z, rx: ang.rx + 1, ry: ang.ry + (i % 2 ? 4 : -4), rz: 0, ...(i ? { e: out } : {}) })
+  })
+  const zAll = Math.min((0.82 * H) / chh, (0.8 * W) / cw, 1.6)
+  const built = Math.max(...a.steps.map((p) => p.at + p.len))
+  cam.push({ t: built + 0.55, x: CX, y: CY, z: zAll, rx: ang.rx, ry: ang.ry * 0.8, rz: 0, e: out })
+  // then drifting in on the whole of it, turning a touch, until the cut takes it
+  if (E - 0.02 > built + 0.9) cam.push({ t: E - 0.02, x: CX, y: CY - 6, z: zAll * 1.05, rx: ang.rx * 0.8, ry: ang.ry * 0.55, e: "linear" })
+  const els: El[] = [el(id, "assembly", S - T / 2, E + T / 2, 20, [{ t: S - T / 2, x: CX, y: CY, w: cw, h: chh, o: 0 }, { t: o - 0.12, o: 1 }], { src: s.src, a, cw: s.w, ch: s.h })]
+  // the press: the hand coming in on the button, a ring of the accent as it goes down
+  if (a.press) {
+    const p = { x: wx(a.press.x), y: wy(a.press.y) }
+    const tp = a.press.at
+    els.push(
+      el(`${id}c`, "cursor", tp - 0.6, tp + 0.5, 40, [{ t: tp - 0.6, x: p.x + 110, y: p.y + 80, o: 0, s: 1 }, { t: tp - 0.45, o: 1 }, { t: tp, x: p.x, y: p.y, e: "out" }, { t: tp + 0.08, s: 0.85, e: "out" }, { t: tp + 0.25, s: 1, e: "out" }, { t: tp + 0.35, o: 1 }, { t: tp + 0.5, o: 0 }]),
+      el(`${id}g`, "glow", tp + 0.05, tp + 0.7, 35, [{ t: tp + 0.05, x: p.x, y: p.y, w: 30, o: 0.8, fill: x.f.accent }, { t: tp + 0.65, w: 220, o: 0, e: "out" }]),
+    )
+  }
+  const rest: Framing = { x: CX, y: CY, z: zAll, rx: ang.rx * 0.8, ry: ang.ry * 0.55 }
+  return { els, cam, dof: [{ t: o, k: 0 }, { t: o + 0.6, k: 0.22 }, { t: built + 0.5, k: 0.15 }], enter: [id], leave: [id], done: a.end, frame: rows.length ? { x: cam[0].x!, y: cam[0].y!, z: cam[0].z!, rx: cam[0].rx, ry: cam[0].ry } : rest, exit: rest }
 }
 
 /** the product's screen opened from its icon (lifted and tilted, the window swinging in from its corner) or flown in;
@@ -375,8 +426,9 @@ function tour(s: Extract<FlowScene, { kind: "tour" }>, x: Ctx): Out {
   // the whole screen seen at an angle, turning square as it's taken in; each part seen leaning towards the side of
   // the screen it's on (a part on the left, from the left), as a camera moved round to it would
   const lean = (p: { x: number; y: number }) => ({ rx: 4 + (0.5 - p.y) * 10, ry: (0.5 - p.x) * 26 })
-  const view: Framing = { x: CX, y: CY, z: z0 * 0.94, rx: 9, ry: -14 }
-  const cam: CamKey[] = [{ t: o, ...view }, { t: o + 0.45 * k, x: CX, y: CY, z: z0 * 1.02, rx: 4, ry: -6 }]
+  const ang = x.angle ?? ANGLES.high
+  const view: Framing = { x: CX, y: CY, z: z0 * 0.94, rx: ang.rx + 3, ry: ang.ry * 1.1, rz: ang.rz }
+  const cam: CamKey[] = [{ t: o, ...view }, { t: o + 0.45 * k, x: CX, y: CY, z: z0 * 1.02, rx: ang.rx * 0.45 + 1, ry: ang.ry * 0.45, rz: 0 }]
   stops.forEach((p, j) => {
     const t = o + 0.45 * k + j * 1.25 * k
     const q = pt(p)
@@ -432,10 +484,10 @@ function orbit(s: Extract<FlowScene, { kind: "orbit" }>, x: Ctx): Out {
     }
     // spun up, it keeps going at the speed it reached until the cut takes it (it never stops dead in a hold)
     const w = (turn * 2.6) / (spin1 - spin0)
-    for (let t = spin1 + 15 / w; t < E + T / 2 + 15 / w; t += 15 / w) keys.push({ t, ...at(a0 + turn + w * (t - spin1), R), e: "linear" })
+    for (let t = spin1 + 15 / w; t < E + T / 2 + 15 / w; t += 15 / w) keys.push({ t, ...at(a0 + turn + w * (t - spin1), R), e: "linear", amb: true })
     els.push(el(`or${x.i}c${j}`, "chip", S - T / 2, E + T / 2, 20 + j, keys, { text: name, dark: j % 2 === 0, accent: x.f.accent }))
   })
-  return { els, cam: [{ t: o, ...REST }], dof: [{ t: o, k: 0 }], enter: carried ? [`or${x.i}r`] : [`or${x.i}m`, `or${x.i}r`], leave: els.map((e) => e.id), done: spin1, frame: REST }
+  return { els, cam: [{ t: o, ...REST }], dof: [{ t: o, k: 0 }], enter: carried ? [`or${x.i}r`] : [`or${x.i}m`, `or${x.i}r`], leave: els.map((e) => e.id), done: spin1, frame: REST, still: true }
 }
 
 /** cards becoming each other: one box resizing from each card to the next (from a grey placeholder, the call to
@@ -577,11 +629,25 @@ function depart(els: El[], ids: string[], a: number, b: number, how: Transition,
   }
 }
 /** how long before a cut the scene before starts to leave, for each transition (what `fit` leaves room for) */
+/** When a scene's own animation is really done: the last key of its elements that stays put when the scene is made
+    longer (`again`: the same scene built 30 s longer; a key that moves with its end is a drift lasting until it
+    leaves, not a step of its choreography, and one marked ambient never counts), and never before its builder says. */
+export function doneOf(o: Out, again: Out): number {
+  let d = o.done
+  for (const e of o.els) {
+    const e2 = again.els.find((y) => y.id === e.id)
+    if (!e2) continue
+    const ts = new Set(e2.keys.filter((k) => !k.amb).map((k) => k.t.toFixed(4)))
+    for (const k of e.keys) if (!k.amb && k.t > d && ts.has(k.t.toFixed(4))) d = k.t
+  }
+  return d
+}
+
 export const leadOf = (how: Transition | null, T: number) => (how === "morph" ? T / 2 + 0.25 : how === "snap" ? 0.03 : how === "dot" ? T / 2 + 0.3 : how === "wipe" || how === "sweep" || how === "iris" ? T / 2 + 0.1 : how ? 0.42 * T : 0)
 
 /** The motion graph of a flow: its scenes built in their variants, joined by their transitions, under the camera the
     camera generator gives it. `needs`: how long each scene has to be to finish its own animation, hold and leave. */
-export function compose(f: Flow, st?: Style): Graph & { choices: ReturnType<typeof choose>; needs: number[]; style: MotionStyle } {
+export function compose(f: Flow, st?: Style): Graph & { choices: ReturnType<typeof choose>; needs: number[]; style: MotionStyle; angles: (string | null)[] } {
   const ms = styleOf({ ...f, style: st ?? f.style })
   const T = ms.T
   const ch = choose(f, st)
@@ -594,44 +660,87 @@ export function compose(f: Flow, st?: Style): Graph & { choices: ReturnType<type
   const grounds: GroundKey[] = []
   const cuts: Cut[] = []
   const built: Out[] = []
+  const build = (s: FlowScene, x: Ctx, i: number): Out =>
+    s.kind === "words" ? words(s, x)
+    : s.kind === "prompt" ? prompt(s, x)
+    : s.kind === "brand" ? brand(s, x, f.scenes[i - 1])
+    : s.kind === "panel" ? panel(s, x)
+    : s.kind === "component" ? component(s, x)
+    : s.kind === "app" ? app(s, x)
+    : s.kind === "tour" ? tour(s, x)
+    : s.kind === "orbit" ? orbit(s, x)
+    : s.kind === "cards" ? cards(s, x)
+    : s.kind === "stack" ? stack(s, x)
+    : end(s, x)
+  const seed = (f.style?.seed ?? hash(f.name)) % 100000
+  const shots: (Shot | null)[] = []
+  const usedBackdrops: BackdropKind[] = []
+  const productWords = [f.name, ...f.scenes.map((s) => (s.kind === "words" ? s.text : ""))].join(" ")
+  const groundOf: Ground[] = []
+  const frames: Framing[] = []
+  const usedAngles: string[] = []
+  const angles: (string | null)[] = []
   f.scenes.forEach((s, i) => {
-    const x: Ctx = { i, S: at[i], E: at[i] + s.dur, T, v: ch.variants[i], f, st: ms, ink: field.ink, quiet: field.quiet, tin: ch.transitions[i], tout: ch.transitions[i + 1] ?? null }
-    const o =
-      s.kind === "words" ? words(s, x)
-      : s.kind === "prompt" ? prompt(s, x)
-      : s.kind === "brand" ? brand(s, x, f.scenes[i - 1])
-      : s.kind === "panel" ? panel(s, x)
-      : s.kind === "app" ? app(s, x)
-      : s.kind === "tour" ? tour(s, x)
-      : s.kind === "orbit" ? orbit(s, x)
-      : s.kind === "cards" ? cards(s, x)
-      : s.kind === "stack" ? stack(s, x)
-      : end(s, x)
+    // a product scene's own camera takes an angle the film hasn't used yet
+    const pa = angleFor(s.kind, seed + i * 7, usedAngles)
+    const x: Ctx = { i, S: at[i], E: at[i] + s.dur, T, v: ch.variants[i], f, st: ms, ink: field.ink, quiet: field.quiet, tin: ch.transitions[i], tout: ch.transitions[i + 1] ?? null, ...(pa ? { angle: ANGLES[pa] } : {}) }
+    const o = build(s, x, i)
+    // when it's really done: what its builder says, or the last key of its own that stays put when it's made longer
+    o.done = doneOf(o, build(s, { ...x, E: x.E + 30 }, i))
+    // words want reading time from when they start to show
+    const said = s.kind === "words" ? s.text : s.kind === "end" ? `${s.lead} ${s.tail} ${s.swap?.join(" ") ?? ""}` : ""
+    if (said) o.done = Math.max(o.done, at[i] + T / 2 + TASTE.read.base + said.split(/\s+/).filter(Boolean).length / TASTE.read.wps - ms.hold)
+    // a still scene is seen from an angle, the camera moving through it (a shot: camera.ts)
+    const shot = o.still ? shotFor(s.kind, ms, seed + i * 13, shots[i - 1] ?? undefined, usedAngles) : null
+    shots.push(shot)
+    // the angle this scene is seen from (a scene that keeps the camera square on is seen from the front)
+    const seen = pa ?? shot?.angle ?? (s.kind === "app" ? null : "front")
+    angles.push(seen)
+    if (seen) usedAngles.push(seen)
+    frames.push(o.frame)
+    if (shot) {
+      const span = Math.max(0.3, at[i] + s.dur - leadOf(ch.transitions[i + 1] ?? null, T) - (at[i] + T / 2))
+      o.exit = shotEnd(o.frame, shot, ms, span)
+      o.frame = shotStart(o.frame, shot)
+    }
+    // words alone stand on moving graphics (backdrop.ts), quiet where the words are, lifted as each lands
+    let g = s.ground as Ground
+    if ((s.kind === "words" || s.kind === "end") && g.tone !== "image") {
+      const beats = o.els.filter((e) => e.kind === "text").flatMap((e) => e.keys.filter((k) => k.reveal !== undefined && k.reveal > 0 && !k.amb).map((k) => k.t)).filter((t, j, a) => a.indexOf(t) === j)
+      const dark = g.tone === "dark" || (g.tone === "field" && field.ink.toLowerCase() === "#ffffff")
+      const tw = said ? Math.min(0.46, textW(said, 68) / 2 / W) : 0.3
+      const motion = backdropFor({ accent: f.accent, dark, style: ms.id, words: productWords, seed: seed + i * 31, used: usedBackdrops, beats, quiet: { x: 0.5, y: 0.5, w: tw, h: 0.06 }, t0: at[i] })
+      usedBackdrops.push(motion.kind)
+      g = { ...g, motion }
+    }
+    groundOf.push(g)
     built.push(o)
     els.push(...o.els)
-    cam.push(...o.cam)
+    if (!shot) cam.push(...o.cam)
     dof.push(...o.dof)
-    grounds.push(o.ground ?? { t: at[i], g: s.ground as Ground, blend: i ? T : 0 })
-    if (o.ground && i) grounds.push({ t: at[i], g: f.scenes[i - 1].ground as Ground, blend: 0 })
+    grounds.push(o.ground ? { ...o.ground, g } : { t: at[i], g, blend: i ? T : 0 })
+    if (o.ground && i) grounds.push({ t: at[i], g: groundOf[i - 1], blend: 0 })
     cuts.push({ t: at[i], name: s.kind, kind: s.kind, transition: ch.transitions[i] ?? "start", meaning: s.meaning })
   })
-  // the camera generator: a creep in the still scenes, close-ups on what's typed into or pressed
+  // the camera generator: each still scene's shot, close-ups on what's typed into or pressed
   built.forEach((o, i) => {
     const s0 = at[i] + T / 2
     const e0 = at[i] + f.scenes[i].dur - leadOf(ch.transitions[i + 1] ?? null, T)
-    if (o.still) cam = layer(cam, inScene(ms, s0, e0, o.frame))
+    const shot = shots[i]
+    if (shot) cam = layer(cam, shotKeys(ms, s0, e0, frames[i], shot))
+    else if (o.still) cam = layer(cam, inScene(ms, s0, e0, o.frame))
     for (const fc of o.focus ?? []) cam = layer(cam, onFocus(ms, fc, o.frame))
   })
   // the joins
   const plainAt = (C: number) => grounds.findIndex((g) => g.t === C && g.blend === T)
   const cover = (i: number, C: number, from: { x: number; y: number; w: number }, a: number, b: number, e: Ease) => {
     const s = f.scenes[i]
-    const fill = groundFill(s.ground as Ground, field.base)
+    const fill = groundFill(groundOf[i], field.base)
     // over everything of the scene it covers (the next scene's arrive as it finishes)
     els.push(el(`cover${i}`, "box", a, b + 0.03, 90, [{ t: a, x: from.x, y: from.y, w: from.w, h: from.w, r: from.w / 2, fill }, { t: b, x: from.x, y: from.y, w: 4800, h: 4800, r: 2400, e }]))
     const plain = plainAt(C)
     if (plain >= 0) grounds.splice(plain, 1)
-    grounds.push({ t: b, g: s.ground as Ground, blend: 0 })
+    grounds.push({ t: b, g: groundOf[i], blend: 0 })
   }
   f.scenes.forEach((s, i) => {
     if (!i) return
@@ -685,7 +794,41 @@ export function compose(f: Flow, st?: Style): Graph & { choices: ReturnType<type
   grounds.sort((a, b) => a.t - b.t)
   // how long each scene must be: its own animation, the style's hold, then the lead its way out needs
   const needs = built.map((o, i) => Math.round((o.done - at[i] + ms.hold + leadOf(ch.transitions[i + 1] ?? null, T) + (i === 0 ? 0 : 0)) * 100) / 100)
-  return { dur, els, cam, dof, grounds, cuts, accent: f.accent, ink: field.ink, quiet: field.quiet, name: f.name, lag: ms.lag, choices: ch, needs, style: ms }
+  return { dur, els, cam, dof, grounds, cuts, accent: f.accent, ink: field.ink, quiet: field.quiet, name: f.name, lag: ms.lag, choices: ch, needs, style: ms, angles }
+}
+
+/** A film composed and read against the guardrails (guardrails.ts): the graph, and the verdict. What the server, the
+    film script and the checks call before anything is rendered. */
+export function review(f: Flow): { graph: ReturnType<typeof compose>; verdict: Verdict } {
+  const g = compose(f)
+  const at = f.scenes.reduce<number[]>((a, s, i) => [...a, i ? a[i - 1] + f.scenes[i - 1].dur : 0], [])
+  const lead = f.scenes.map((_, i) => leadOf(g.choices.transitions[i + 1] ?? null, g.style.T))
+  const done = g.needs.map((n, i) => at[i] + n - g.style.hold - lead[i])
+  const verdict = judge(g, {
+    at,
+    dur: f.scenes.map((s) => s.dur),
+    kinds: f.scenes.map((s) => s.kind),
+    done,
+    lead,
+    hold: g.style.hold,
+    transitions: g.choices.transitions,
+    words: f.scenes.map((s) => (s.kind === "words" ? s.text : null)),
+    angles: g.angles,
+    fields: f.scenes.map((s, i) => (s.ground.tone === "field" ? { at: at[i], colors: composedField(f.accent, { variant: s.ground.variant, dark: f.dark }).blobs.filter((b) => b.a > 0.15).map((b) => b.color) } : null)).filter((x): x is { at: number; colors: string[] } => !!x),
+    product: f.scenes.map((s) => (s.kind === "panel" ? s.panel.src : s.kind === "component" ? s.src : s.kind === "tour" || s.kind === "app" ? s.media : "n/a")),
+    brandHue: hueOfHex(f.accent),
+  })
+  return { graph: g, verdict }
+}
+const hueOfHex = (c: string) => {
+  const m = /^#([0-9a-f]{6})$/i.exec(c)
+  if (!m) return undefined
+  const n = parseInt(m[1], 16)
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => v / 255)
+  const mx = Math.max(r, g, b)
+  const d = mx - Math.min(r, g, b)
+  if (d < 0.08) return undefined
+  return mx === r ? 60 * (((g - b) / d + 6) % 6) : mx === g ? 60 * ((b - r) / d + 2) : 60 * ((r - g) / d + 4)
 }
 
 /** A flow with every scene long enough to play all of itself, hold, and only then leave (composed again until it

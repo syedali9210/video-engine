@@ -3,10 +3,14 @@
 // clipped at a point), a mark, an app icon, a window on a screen or recording, a card (drawn or the product's own),
 // a send button, and a panel (the unfold's body: the product's own when captured). Nothing here knows a scene.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { composedField, type Composition } from "../../studio/field";
+import { composedField, satinField, type Composition } from "../../studio/field";
+import { SatinView } from "../_film/satin";
 import type { Card } from "../../studio/flow";
 import type { El, Ground, P } from "../../studio/graph";
 import { FieldView } from "../_film/field";
+import { BackdropView, type Cam } from "../_film/backdrop";
+import { AssemblyView } from "../_film/assembly";
+import type { Assembly } from "../../studio/assemble";
 import { Cursor, Slot, alpha, hexMix, measure } from "../_film/kit";
 import { PanelBody, type PanelState } from "../film-unfold/view";
 import type { Params as UnfoldParams } from "../film-unfold/params";
@@ -19,8 +23,25 @@ const WHITE = "#ffffff";
 
 /* ---------------- grounds ---------------- */
 
-export function GroundView({ g, t, accent, shift }: { g: Ground; t: number; accent: string; shift?: { x: number; y: number } }) {
+/** A ground, moving against the camera: its shift, and (`cam`) the camera's turn, tilt, roll and zoom, by less than the
+    world does (it's further away), so an angle reads in the gradient too; and its moving graphics over it, if any. */
+export function GroundView({ g, t, accent, shift, cam }: { g: Ground; t: number; accent: string; shift?: { x: number; y: number }; cam?: Partial<Cam> }) {
+  const c = { z: 1, rx: 0, ry: 0, rz: 0, ...cam };
+  const par = { x: (shift?.x ?? 0) - c.ry * 9, y: (shift?.y ?? 0) + c.rx * 7 };
+  return (
+    <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
+      <div style={{ position: "absolute", left: "-6%", top: "-6%", width: "112%", height: "112%", transform: `rotate(${(c.rz * 0.5).toFixed(3)}deg) scale(${(1 + (c.z - 1) * 0.05).toFixed(4)})` }}>
+        <Plain g={g} t={t} accent={accent} shift={par} />
+      </div>
+      {g.motion && <BackdropView b={g.motion} t={t} cam={c} shift={shift} />}
+    </div>
+  );
+}
+
+function Plain({ g, t, accent, shift }: { g: Ground; t: number; accent: string; shift?: { x: number; y: number } }) {
   const field = useMemo(() => (g.tone === "field" ? composedField(accent, { variant: g.variant as Composition }) : null), [g, accent]);
+  const satin = useMemo(() => (g.tone === "field" && g.finish !== "matte" ? satinField(accent, { variant: g.variant as Composition }) : null), [g, accent]);
+  if (satin) return <SatinView s={satin} t={t} shift={shift} />;
   if (g.tone === "field" && field) return <FieldView field={field} t={t} grain={g.grain ?? 0} shift={shift} />;
   if (g.tone === "image") {
     // a picture of the library's: cover, drifting slowly closer, a little behind the camera's moves
@@ -59,17 +80,20 @@ const wipe = (r: number): CSSProperties => {
   const m = `linear-gradient(90deg, #000 ${(e - 0.14) * 100}%, transparent ${e * 100}%)`;
   return { maskImage: m, WebkitMaskImage: m };
 };
-/** a prompt streaming in: what's typed solid, the newest letters arriving out of the accent's light */
+/** a prompt streaming in: what's typed solid, the newest letters arriving out of the accent's light, each settling
+    by its own age (`n` letters' worth of time has passed: past the last letter it keeps counting, so the last ones
+    settle too and the line finishes solid) */
 function Stream({ text, n, tail }: { text: string; n: number; tail: string }) {
-  const k = Math.floor(n);
   const run = 9;
+  const shown = Math.min(text.length, Math.floor(n));
+  const from = Math.max(0, Math.min(shown, Math.floor(n - run)));
   return (
     <>
-      {text.slice(0, Math.max(0, k - run))}
-      {[...text.slice(Math.max(0, k - run), k)].map((ch, i, a) => {
-        const f = (i + 1) / (a.length + 1);
+      {text.slice(0, from)}
+      {[...text.slice(from, shown)].map((ch, i) => {
+        const f = Math.max(0, Math.min(1, (n - (from + i)) / run));
         return (
-          <span key={i} style={{ color: hexMix(hexMix(tail, WHITE, 0.45), INK, f), opacity: 0.25 + 0.75 * f }}>
+          <span key={i} style={f >= 1 ? undefined : { color: hexMix(hexMix(tail, WHITE, 0.45), INK, f), opacity: 0.25 + 0.75 * f }}>
             {ch}
           </span>
         );
@@ -194,11 +218,16 @@ export function ElView({ e, p, t, mb, accent, panel, panelP, zHand }: { e: El; p
       const left = align === "center" ? p.x - width / 2 : align === "right" ? p.x - width : p.x;
       const top = c.top ? p.y : p.y - size * 0.68;
       const clip = p.cx > 0 ? Math.max(0, p.cx - left) : 0;
-      const typed = p.typed < 1e5 ? p.typed : undefined;
+      // (past its last typed key the count goes on at the speed it was typed, so the newest letters settle)
+      const tk = e.keys.filter((k) => k.typed !== undefined).sort((a, b) => a.t - b.t);
+      const tl = tk[tk.length - 1];
+      const tp = tk[tk.length - 2];
+      const cps = tl && tp && tl.t > tp.t ? (tl.typed! - tp.typed!) / (tl.t - tp.t) : 60;
+      const typed = p.typed < 1e5 ? p.typed + (tl && t > tl.t ? (t - tl.t) * Math.max(20, cps) : 0) : undefined;
       const byWord = c.mode === "words";
       body = (
         <div style={{ ...base, left, top, width, transformOrigin: align === "center" ? "50% 50%" : align === "right" ? "100% 50%" : "0 50%", transform: `scale(${p.s}) rotate(${p.rot}deg)`, fontFamily: SANS, fontSize: size, fontWeight: weight, letterSpacing: size > 40 ? "-0.025em" : "-0.01em", lineHeight: c.top ? 1.36 : 1.3, color, whiteSpace: c.width ? "normal" : "nowrap", clipPath: clip ? `inset(-20% -10% -20% ${clip}px)` : undefined, ...(byWord ? {} : wipe(p.reveal)) }}>
-          {typed !== undefined ? <Stream text={text} n={Math.min(text.length, typed)} tail={String(c.tail ?? accent)} /> : byWord ? <ByWord text={text} k={p.reveal} from={Number(c.accentFrom ?? 1e9)} accent={hexMix(String(c.accent ?? accent), WHITE, 0.25)} /> : text}
+          {typed !== undefined ? <Stream text={text} n={typed} tail={String(c.tail ?? accent)} /> : byWord ? <ByWord text={text} k={p.reveal} from={Number(c.accentFrom ?? 1e9)} accent={hexMix(String(c.accent ?? accent), WHITE, 0.25)} /> : text}
         </div>
       );
       break;
@@ -265,6 +294,17 @@ export function ElView({ e, p, t, mb, accent, panel, panelP, zHand }: { e: El; p
           <div style={{ position: "absolute", left: (p.w - 900) / 2, top: 0, width: 900, height: p.h, opacity: p.co, filter: blurOf((1 - p.co) * 10) }}>
             <CardBody card={card} accent={accent} />
           </div>
+        </div>
+      );
+      break;
+    }
+    case "assembly": {
+      // a component built piece by piece, `w` wide in the world, centred at (x, y)
+      const a = c.a as Assembly;
+      const k = p.w / Number(c.cw ?? a.w);
+      body = (
+        <div style={{ position: "absolute", left: 0, top: 0, opacity: p.o, filter: blurOf(blur), transformOrigin: "0 0", transform: `translate(${p.x - (a.w * k) / 2}px, ${p.y - (a.h * k) / 2}px) scale(${k})` }}>
+          <AssemblyView src={String(c.src)} a={a} t={t} accent={accent} />
         </div>
       );
       break;

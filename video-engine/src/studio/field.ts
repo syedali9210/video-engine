@@ -5,13 +5,17 @@
 //   light  a near-white, cooled a little, the highlight opposite the mass
 //   sheen  near-white at an edge, softening it
 //   band   a mid tone turned a step round the wheel, a long soft streak
-//   haze   a pale tint well round the wheel (blue's is a lilac-pink), low and wide at the bottom
+//   haze   a pale tint a step the other way, low and wide at the bottom
 //   dark   the brand at its deepest, anchoring a corner (what gives the field its depth)
 // Several compositions place them differently (a diagonal, its mirror, a horizon, a spotlight); the director gives
 // each act its own, so the film changes as it goes without leaving its family. Worked in OKLCH, so lightness and
 // chroma mean what they look like. The text that sits on it (ink) is read off the middle, where titles go.
+// Held to the guardrails (guardrails.ts): no role turns further from the brand's hue than half `TASTE.hues`, so a
+// field is one family (a blue brand's never goes pink). `satin` gives a field the material of a satin weave (folds, a
+// moving sheen, fine diagonal threads: animations/_film/satin.tsx draws it), the finish the reference picture has.
 // Pure: the films draw it (animations/_film/field.tsx), the director and `npm run check` read it.
 import { hex, lch } from "../theme.ts"
+import { TASTE } from "./guardrails.ts"
 
 export type Role = "mass" | "glow" | "light" | "sheen" | "band" | "haze" | "dark"
 /** one soft shape: its centre and radii (fractions of the frame), its turn (degrees), its colour and strength */
@@ -24,10 +28,10 @@ export type Composition = (typeof COMPOSITIONS)[number]
 const TONES: Record<Role, { l: number; c: number; dh: number; dl: number; dc: number }> = {
   mass: { l: 0.53, c: 0.22, dh: 2, dl: 0.4, dc: 0.18 },
   glow: { l: 0.67, c: 0.15, dh: -12, dl: 0.52, dc: 0.15 },
-  light: { l: 0.93, c: 0.045, dh: -28, dl: 0.78, dc: 0.08 },
+  light: { l: 0.93, c: 0.045, dh: -14, dl: 0.78, dc: 0.08 },
   sheen: { l: 0.96, c: 0.02, dh: 8, dl: 0.66, dc: 0.06 },
   band: { l: 0.7, c: 0.12, dh: 14, dl: 0.48, dc: 0.13 },
-  haze: { l: 0.9, c: 0.05, dh: 52, dl: 0.55, dc: 0.09 },
+  haze: { l: 0.88, c: 0.06, dh: 16, dl: 0.55, dc: 0.09 },
   dark: { l: 0.34, c: 0.1, dh: -3, dl: 0.13, dc: 0.06 },
 }
 /** where each composition puts them (x, y, rx, ry, turn), back to front */
@@ -84,7 +88,9 @@ export function composedField(accent?: string, o: { dark?: boolean; variant?: Co
   const variant = o.variant && COMPOSITIONS.includes(o.variant) ? o.variant : "diagonal"
   const tone = (r: Role) => {
     const t = TONES[r]
-    return hex({ l: o.dark ? t.dl : t.l, c: o.dark ? t.dc : t.c, h: h + t.dh })
+    // (never past half the guardrail's turn either way: one family)
+    const dh = Math.max(-TASTE.hues / 2, Math.min(TASTE.hues / 2, t.dh))
+    return hex({ l: o.dark ? t.dl : t.l, c: o.dark ? t.dc : t.c, h: h + dh })
   }
   const blobs = LAYOUTS[variant].map(([role, x, y, rx, ry, rot, a]) => ({ role, x, y, rx, ry, rot, a, color: tone(role) }))
   const base = hex({ l: o.dark ? 0.2 : variant === "spot" ? 0.3 : 0.6, c: o.dark ? 0.09 : 0.17, h: h - 5 })
@@ -100,4 +106,31 @@ export function compositionFor(role: string, i: number, last: boolean): Composit
   if (role === "turn") return "spot"
   if (role === "proof") return i % 2 ? "mirror" : "horizon"
   return "diagonal"
+}
+
+/** A satin field: the composed field's colours and places, as the material of a satin weave. What the shader needs:
+    its colours (deep, mass, glow, light, sheen), where the mass and the light sit (frame fractions), the threads'
+    angle and pitch (px at 1080p), how strong the sheen is, a seed. */
+export type Satin = { deep: string; mass: string; glow: string; light: string; sheen: string; at: [number, number]; lit: [number, number]; angle: number; pitch: number; sheenK: number; seed: number }
+export function satinField(accent?: string, o: { dark?: boolean; variant?: Composition; seed?: number } = {}): Satin {
+  const f = composedField(accent, o)
+  const role = (r: Role) => f.blobs.find((b) => b.role === r)
+  const h = fieldHue(accent)
+  const mass = role("mass") ?? f.blobs[0]
+  const lit = role("light") ?? role("sheen") ?? f.blobs[f.blobs.length - 1]
+  // the sheen: near-white, turned a little within the family (the picture's highlights catch a cooler and a warmer light)
+  const turn = Math.min(TASTE.hues / 2, 14)
+  return {
+    deep: role("dark")?.color ?? hex({ l: 0.3, c: 0.1, h }),
+    mass: mass.color,
+    glow: role("glow")?.color ?? hex({ l: 0.67, c: 0.15, h }),
+    light: lit.color,
+    sheen: hex({ l: o.dark ? 0.82 : 0.97, c: 0.05, h: h + turn }),
+    at: [mass.x, mass.y],
+    lit: [lit.x, lit.y],
+    angle: -34,
+    pitch: 5.5,
+    sheenK: o.dark ? 0.45 : 0.6,
+    seed: o.seed ?? 7,
+  }
 }

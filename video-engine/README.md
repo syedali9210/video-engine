@@ -584,12 +584,84 @@ is soft. `styleFromProfile` turns any `npm run measure` profile into a style. Ev
 choreography is done, plus the style's hold, plus the lead-in of the transition after it (`fit` in `compose.ts`
 lengthens scenes until that's true), so no scene leaves before it's finished.
 
-**The camera generator** (`src/studio/camera.ts`). Three parts, each from the motion style, laid over the framing
+**The camera generator** (`src/studio/camera.ts`). Four parts, each from the motion style, laid over the framing
 each scene asks for:
-- **in a scene:** a slow creep closer while it's read, and a punch (a quick zoom, settling back) on a beat
+- **shots:** each still scene is seen from an angle and moved through.
+  - Angles: front, three-quarter, low, high, dutch, over the shoulder, close, wide.
+  - Moves: push, pull, truck, orbit, crane, roll, drift.
+  - The shot is chosen by the scene's kind, the style (a style of cuts takes the bolder angles) and a seed.
+  - **No angle twice in a film:** every scene is seen from an angle of its own. That includes the product scenes' own
+    cameras (a tour, a component being built, a panel), which take theirs from the same library (`angleFor`). The
+    judge refuses a repeat.
+- **in a scene:** a punch (a quick zoom, settling back) on a beat
 - **between scenes:** through the cut (closing in and coming out into the next), or a snap to the next framing
 - **on an interaction:** a little before something is typed into or pressed, the camera goes close on it (never past
   filling most of the frame), holds while it happens, then goes back
+
+The grounds move against the camera with depth: its turn and tilt shift them, its roll turns them, its zoom scales them,
+each by less than the world (they're further away), so an angle reads in a gradient too.
+
+**Satin** (`satinField` in `src/studio/field.ts`, drawn by `src/animations/_film/satin.tsx`). A `field` ground's
+default finish is the material of the reference picture, a satin weave, drawn as a WebGL fragment shader (a pure
+function of the clock):
+- the composed field's colours and places;
+- broad slow folds, lit by a light that wanders, throwing a long soft sheen;
+- fine diagonal threads, each a little uneven, showing most where the light catches them.
+
+It moves against the camera like every ground. `finish: "matte"` keeps the plain composed field. Every colour stays in
+the brand's hue family: no role turns more than half the guardrail's 40° from it, and the judge checks each gradient.
+
+**Backdrops** (`src/studio/backdrop.ts`, drawn by `src/animations/_film/backdrop.tsx`). A scene of words alone stands on
+moving graphics, so it's never a still:
+- **The kinds:** orbs, ribbons, a grid receding to a horizon, rings opening from behind the words, streaks, dust, or
+  contour lines.
+- **The choice:** by what the product's words say it is, then the motion style's tempo; never the kind the film has
+  already used.
+- **Colours:** in the brand's hue (light and chroma spread, the hue barely turning).
+- **Behaviour:** quiet behind the words, lifted as each word lands, moving against the camera with depth.
+
+**Assembly** (`src/studio/assemble.ts`, drawn by `src/animations/_film/assembly.tsx`; a `component` scene). A
+component of the product's own, built in front of the camera one piece at a time. Every piece lands exactly where it is
+in the product.
+- **Capture:** `public/panel-capture.js` marks the component's parts (surfaces, dividers, words, icons, pictures,
+  buttons, controls) with their boxes and nesting, and wraps each word.
+- **Order:** row by row from the top, left to right.
+- **How each kind arrives:**
+  - the title is typed with a caret;
+  - other words rise word by word out of a little blur;
+  - buttons form from a dot;
+  - dividers draw;
+  - surfaces open down;
+  - icons pop.
+- **The outline:** grows from a pill to the full component as rows arrive.
+- **The camera:** follows each row at an angle, pulls back to the whole, and the button is pressed.
+- **Accuracy:** only opacity, transform, clip and blur are touched, over each part's captured look, so when it's done
+  it's the product's component to the pixel.
+
+**The guardrails** (`src/studio/guardrails.ts`): taste, written down as numbers the generator builds inside. `judge`
+reads every film against them before it's made:
+- **complete:** every scene plays all of its own animation, holds, then leaves. `doneOf` finds when a scene is really
+  done: the scene is built again 30 s longer, and every key that doesn't move with its end is choreography.
+- **read:** words are up long enough to read.
+- **still:** nothing sits dead still for over a second.
+- **camera:** angles and zoom in bounds.
+- **blur:** capped.
+- **colour:** one hue family, the brand's.
+- **cuts:** never three alike running.
+- **product:** its own captured screens and components.
+- **type:** readable.
+
+`review(flow)` in `compose.ts` composes and judges it. `POST /__film/flow` refuses a film that breaks one (422, with
+the findings).
+
+**The pipeline from the command line:**
+- `npm run shoot -- screen <url> <out.png> [--hide "name"] [--click "button"]` takes a 2× screenshot for a tour.
+- `npm run shoot -- component <url> --title "…" --rows "…" --ctas "…" [--click "…"]` freezes a component with its
+  parts, for a `component` scene.
+- `npm run film -- <plan.json> [--check] [--draft]` judges, makes, renders and saves a film, and prints how long each
+  part took.
+- The MCP's `flow_film` does the same.
+- `CLAUDE.md` and the `launch-film` skill (`.claude/skills`) point every session at this pipeline.
 
 **The image library** (`/images.html`, `server/images.ts`, `src/studio/images.ts`). Upload pictures for films to open
 on. Each is read once with ffmpeg for its vibe: its palette, hue, how light, vivid, warm and busy, and whether it looks

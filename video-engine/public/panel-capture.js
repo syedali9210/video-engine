@@ -3,8 +3,12 @@
 // nothing else: every element's computed look inlined, its ::before/::after made real, its pictures and the fonts it
 // uses carried as data, the SVG sprites it points at copied in. Its title, its property rows and its buttons are
 // marked (data-unfold, data-unfold-row) for the unfold film (src/animations/film-unfold) to build them one by one.
+// Every capture also marks the parts it's made of (data-part: its surfaces, dividers, words, icons, pictures, buttons,
+// controls), with where each sits and what it's inside, and each word of its text in a span of its own (data-w): the
+// manifest (`parts`) is what the assembly (src/studio/assemble.ts) builds the component from, one piece at a time.
 // Runs in the page: headless Chrome evaluates it (server/maker.ts), and pasted into a browser's console it defines
-// the same `window.__capturePanel(spec)` -> Promise<{ html, w, h, found } | { error }>.
+// the same `window.__capturePanel(spec)` -> Promise<{ html, w, h, found, parts } | { error }>, and
+// `window.__captureComponent({ selector? | title? | text? })` for any component.
 (() => {
   const norm = (s) => (s || "").replace(/\s+/g, " ").trim().toLowerCase();
   const PROPS = [
@@ -98,6 +102,86 @@
       }))
       .catch(() => null);
 
+  /** the parts a component is made of, marked on its copy: what each is, where (px inside the component, at the page's
+      own scale), what part it's inside; each word of its words in a span of its own */
+  function annotate(pairs, root) {
+    const rb = root.getBoundingClientRect();
+    const k = rb.width / (root.offsetWidth || rb.width) || 1;
+    const parts = [];
+    const idOf = new Map();
+    const rawOwn = (el) => [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join(" ").replace(/\s+/g, " ").trim();
+    const isDrawn = (cs) => (cs.backgroundColor !== "rgba(0, 0, 0, 0)" && cs.backgroundColor !== "transparent") || cs.boxShadow !== "none" || parseFloat(cs.borderTopWidth) > 0 || parseFloat(cs.borderBottomWidth) > 0 || parseFloat(cs.borderLeftWidth) > 0;
+    const chroma = (c) => {
+      const m = (c.match(/[\d.]+/g) || []).map(Number);
+      return m.length >= 3 ? Math.max(m[0], m[1], m[2]) - Math.min(m[0], m[1], m[2]) : 0;
+    };
+    const wrap = (dst, deep) => {
+      const nodes = [];
+      const walk = (n) => n.childNodes.forEach((c) => (c.nodeType === 3 ? nodes.push(c) : deep && c.nodeType === 1 && c.tagName !== "svg" && walk(c)));
+      walk(dst);
+      for (const node of nodes) {
+        if (!node.textContent.trim()) continue;
+        const frag = document.createDocumentFragment();
+        for (const w of node.textContent.split(/(\s+)/)) {
+          if (!w) continue;
+          if (/^\s+$/.test(w)) frag.append(w);
+          else {
+            const sp = document.createElement("span");
+            sp.setAttribute("data-w", "");
+            sp.setAttribute("style", "display:inline-block;white-space:pre");
+            sp.textContent = w;
+            frag.append(sp);
+          }
+        }
+        node.replaceWith(frag);
+      }
+    };
+    for (const [src, dst] of pairs) {
+      if (src === root || !(src instanceof Element) || !visible(src)) continue;
+      const tag = src.tagName.toLowerCase();
+      if (tag !== "svg" && src.closest("svg")) continue;
+      // inside a button or a control, the button is the part
+      const host = src.parentElement && src.parentElement.closest("button, [role=button], select, [role=switch], [role=tab]");
+      if (host && root.contains(host) && host !== src) continue;
+      const cs = getComputedStyle(src);
+      const r = src.getBoundingClientRect();
+      if (r.width < 2 || r.height < 2) {
+        if (!(r.width >= 12 || r.height >= 12)) continue;
+      }
+      const role = src.getAttribute("role") || "";
+      const drawn = isDrawn(cs);
+      const own = rawOwn(src);
+      const thin = (r.height <= 2.5 && r.width > 12) || (r.width <= 2.5 && r.height > 12);
+      const kind =
+        tag === "button" || role === "button" || (tag === "a" && drawn) || (tag === "input" && /submit|button/.test(src.type)) ? "button"
+        : ["input", "select", "textarea"].includes(tag) || ["switch", "checkbox", "slider", "radio", "tab"].includes(role) ? "control"
+        : tag === "svg" ? "icon"
+        : tag === "img" || tag === "canvas" || /url\(/.test(cs.backgroundImage) ? (r.width > 48 && r.height > 48 ? "image" : "icon")
+        : thin && (drawn || parseFloat(cs.borderTopWidth) > 0) ? "divider"
+        : own ? "text"
+        : drawn && r.width >= 14 && r.height >= 10 ? "surface"
+        : null;
+      if (!kind) continue;
+      let up = -1;
+      for (let e = src.parentElement; e && e !== root; e = e.parentElement) if (idOf.has(e)) { up = idOf.get(e); break; }
+      const id = parts.length;
+      idOf.set(src, id);
+      const part = { id, kind, x: (r.left - rb.left) / k, y: (r.top - rb.top) / k, w: r.width / k, h: r.height / k, depth: up < 0 ? 0 : parts[up].depth + 1, up };
+      if (kind === "text" || kind === "button") {
+        const words = (kind === "button" ? (src.innerText || src.value || "") : own).replace(/\s+/g, " ").trim();
+        if (words) Object.assign(part, { text: words, size: parseFloat(cs.fontSize), weight: +cs.fontWeight || 400 });
+        wrap(dst, kind === "button");
+      }
+      if (kind === "button") part.primary = chroma(cs.backgroundColor) > 60 || (cs.backgroundColor !== "rgba(0, 0, 0, 0)" && chroma(cs.color) < 20 && parseFloat(cs.fontWeight) >= 500);
+      if (kind === "control" && (src.getAttribute("aria-checked") === "true" || src.checked)) part.on = true;
+      dst.setAttribute("data-part", String(id));
+      dst.setAttribute("data-kind", kind);
+      parts.push(part);
+      if (parts.length >= 220) break;
+    }
+    return parts;
+  }
+
   /** one element frozen: its copy with every look inlined (`mark` marks the parts on the copy), its fonts and sprites */
   async function freeze(panel, mark) {
     const box = panel.getBoundingClientRect();
@@ -160,14 +244,17 @@
     out.style.bottom = "auto";
     out.style.margin = "0";
     out.style.transform = "none";
-    out.style.width = `${box.width}px`;
-    out.style.height = `${box.height}px`;
+    // (its own size, not as a transform on the page scales it)
+    const own = box.width / (panel.offsetWidth || box.width) || 1;
+    out.style.width = `${box.width / own}px`;
+    out.style.height = `${box.height / own}px`;
     out.style.boxSizing = "border-box";
     out.style.overflow = "hidden";
     out.style.backgroundColor = groundOf(panel);
     out.setAttribute("data-unfold-root", "");
     const copyOf = new Map(pairs);
     const found = mark ? mark(copyOf) : {};
+    const parts = annotate(pairs, panel);
     // the SVG sprites it points at, and the fonts it's set in, carried along
     let defs = "";
     for (const id of sprites) {
@@ -199,7 +286,9 @@
     const html = `${fonts ? `<style>${fonts}</style>` : ""}${defs ? `<svg width="0" height="0" style="position:absolute">${defs}</svg>` : ""}${out.outerHTML}`;
     // (its ground as hex: what the film mixes a shape's colour from)
     const rgb = (groundOf(panel).match(/[\d.]+/g) || ["255", "255", "255"]).slice(0, 3).map((v) => Math.round(+v).toString(16).padStart(2, "0"));
-    return { html, w: Math.round(box.width), h: Math.round(box.height), bg: `#${rgb.join("")}`, found, url: location.href };
+    // (its size at the page's own scale: what the parts are measured in)
+    const k = box.width / (panel.offsetWidth || box.width) || 1;
+    return { html, w: Math.round(box.width / k), h: Math.round(box.height / k), bg: `#${rgb.join("")}`, found, parts, url: location.href };
   }
 
   window.__capturePanel = async function capture(spec) {
@@ -240,6 +329,18 @@
       }
       return { title: true, rows: labelEls.length, ctas: marked, of: { rows: labels.length, ctas: ctas.length } };
     });
+  };
+
+  /** Any component: by a selector, by its title (with its rows and buttons, as a panel), or by words in it (as a card). */
+  window.__captureComponent = async function captureComponent(spec) {
+    if (spec.selector) {
+      await document.fonts.ready;
+      const el = document.querySelector(spec.selector);
+      if (!el) return { error: `No ${spec.selector} on ${location.href}` };
+      return freeze(el, null);
+    }
+    if (spec.title) return window.__capturePanel(spec);
+    return window.__captureCard(spec);
   };
 
   /** A card (a post, a message, a result) by words in it: the smallest drawn box (its own ground, edge or shadow)

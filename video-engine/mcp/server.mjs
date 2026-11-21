@@ -8,7 +8,7 @@
 //
 //   claude mcp add animation-engine -- node "<engine folder>/mcp/server.mjs"
 //
-// Tools: make_video · make_film · direct_film · edit_film · make_interactive · make_shader_video · list_shader_presets · job_status · list_templates · engine_status
+// Tools: make_video · make_film · direct_film · flow_film · edit_film · make_interactive · make_shader_video · list_shader_presets · job_status · list_templates · engine_status
 // Env:   ENGINE_URL (http://localhost:5180) · STUDIO_CHROME (Chrome or Edge; found by itself otherwise)
 import { spawn, spawnSync } from "node:child_process"
 import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs"
@@ -818,6 +818,42 @@ ${made.spec.name} (${a.kind}${a.preset ? "" : ", made by the rules"}), ${width} 
       }
       const last = (await (await fetch(`${ENGINE}/__film/get?id=${film.id}`)).json()).log ?? film.log
       lines.push(`Cost: ${last.reduce((n, s) => n + (s.tokens || 0), 0).toLocaleString()} tokens on this film, ${Math.round((Date.now() - t0) / 1000)} s.`)
+      return lines.join("\n")
+    },
+  },
+  {
+    name: "flow_film",
+    title: "Make a film from a plan, held to the guardrails",
+    description:
+      "The way to make a launch or product film by hand: write its plan (scenes from src/studio/flow.ts: words, prompt, brand, tour, component, panel, app, orbit, cards, stack, end, each with its ground) and the engine's generator does the rest: every scene's motion, camera shots and angles, transitions, moving backdrops under words alone, the product's own captured components built piece by piece, a score. Before anything is made the plan is judged against the guardrails (src/studio/guardrails.ts: every scene finishes before it leaves, words up long enough to read, nothing still for more than a second, camera angles in bounds, one hue family, the product shown as itself); a plan that breaks one isn't made and the findings come back. Never hand-write a film component instead. Capture screens and components first with `npm run shoot` (scripts/shoot.mjs).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        plan: { type: "object", description: "The flow: { name, accent: \"#rrggbb\", tone?: calm|bright|bold, motion?: soft|kinetic|tour|orbit|cta, scenes: [{ kind, dur (a minimum: the generator lengthens it to fit its animation), ground: { tone: field|dark|light|white|image, ... }, ...its own fields }] }." },
+        plan_file: str("Or the path of a plan's JSON file."),
+        render: { type: "string", enum: ["final", "draft", "none"], description: "What to render and save after (default final)." },
+        force: { type: "boolean", description: "Make it even if it breaks a guardrail (don't, unless asked)." },
+        out: str("Where to save it."),
+      },
+    },
+    async run(a, { progress, signal }) {
+      const t0 = Date.now()
+      await ensureEngine(progress)
+      const plan = a.plan ?? (a.plan_file ? JSON.parse(readFileSync(resolve(a.plan_file), "utf8")) : null)
+      if (!plan) throw new Error("Give the plan (or plan_file).")
+      progress("Composing and judging it", 10)
+      const r = await fetch(`${ENGINE}/__film/flow`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ flow: plan, name: plan.name, force: !!a.force }) })
+      const j = await r.json().catch(() => ({}))
+      const said = (j.verdict?.findings ?? []).map((f) => `${f.level} · ${f.rule}: ${f.text}`)
+      if (r.status === 422) throw new Error(`It breaks the guardrails, so it wasn't made:\n${said.join("\n")}`)
+      if (!r.ok) throw new Error(j.error || `The engine said ${r.status}.`)
+      const lines = [`Film ${j.id}: ${j.length.toFixed(1)} s, ${j.scenes.map((s) => `${s.kind} ${s.dur.toFixed(1)} s`).join(" · ")}.`, said.length ? `Guardrails: ${said.join("; ")}` : "Guardrails: all kept."]
+      if (a.render !== "none") {
+        const { job } = await (await fetch(`${ENGINE}/__film/render`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: j.id, draft: a.render === "draft" }) })).json()
+        if (!(await follow(job, progress, signal, 25 * 60_000))) return `${lines.join("\n")}\nStill rendering: job ${job}.`
+        const file = await save(job, target(a.out, undefined, `${slug(plan.name)}${a.render === "draft" ? "-draft" : ""}.mp4`))
+        lines.push(`Saved: ${file} (${mb(file)} MB), ${Math.round((Date.now() - t0) / 1000)} s in all.`)
+      }
       return lines.join("\n")
     },
   },
