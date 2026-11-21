@@ -10,6 +10,8 @@ import type { El, Ground, P } from "../../studio/graph";
 import { FieldView } from "../_film/field";
 import { BackdropView, type Cam } from "../_film/backdrop";
 import { AssemblyView } from "../_film/assembly";
+import { EngineView } from "../_film/engines";
+import type { EngineSpec } from "../../studio/engines";
 import type { Assembly } from "../../studio/assemble";
 import { Cursor, Slot, alpha, hexMix, measure } from "../_film/kit";
 import { PanelBody, type PanelState } from "../film-unfold/view";
@@ -55,21 +57,15 @@ function Plain({ g, t, accent, shift }: { g: Ground; t: number; accent: string; 
   }
   if (g.tone === "white") return <div style={{ position: "absolute", inset: 0, background: "radial-gradient(120% 90% at 50% 45%, #ffffff 55%, #ececee 100%)" }} />;
   if (g.tone === "light") return <div style={{ position: "absolute", inset: 0, background: "radial-gradient(120% 90% at 50% 40%, #f6f6f8 40%, #dedee3 100%)" }} />;
-  // dark: two soft lights behind the product, the brand's and a warm one, drifting (and moving a little with the camera)
-  const cool = hexMix(accent, WHITE, 0.15);
-  const warm = "#ff7a3d";
-  const lx = 0.28 + Math.sin(t * 0.2) * 0.05;
-  const rx = 0.74 + Math.cos(t * 0.17) * 0.05;
-  const sx = shift?.x ?? 0;
-  const sy = shift?.y ?? 0;
-  return (
-    <div style={{ position: "absolute", inset: 0, background: "#08080a", overflow: "hidden" }}>
-      <div style={{ position: "absolute", left: lx * W0 - 700 + sx, top: -260 + sy, width: 1400, height: 1000, background: `radial-gradient(closest-side, ${alpha(cool, 0.34)}, ${alpha(cool, 0.12)} 55%, transparent)` }} />
-      <div style={{ position: "absolute", left: rx * W0 - 560 + sx * 0.7, top: -200 + sy * 0.7, width: 1120, height: 760, background: `radial-gradient(closest-side, ${alpha(warm, 0.3)}, ${alpha(warm, 0.08)} 60%, transparent)` }} />
-      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.55))" }} />
-    </div>
-  );
+  // dark: the brand at its deepest, as satin (the same shader as a field, in its dark tones: folds and a slow sheen in
+  // one hue family), never lights of other colours
+  return <SatinView s={darkSatin(accent)} t={t} shift={shift} />;
 }
+const darkSatins = new Map<string, ReturnType<typeof satinField>>();
+const darkSatin = (accent: string) => {
+  if (!darkSatins.has(accent)) darkSatins.set(accent, { ...satinField(accent, { dark: true, variant: "spot" }), sheenK: 0.28, pitch: 6 });
+  return darkSatins.get(accent)!;
+};
 
 /* ---------------- the pieces ---------------- */
 
@@ -298,6 +294,14 @@ export function ElView({ e, p, t, mb, accent, panel, panelP, zHand }: { e: El; p
       );
       break;
     }
+    case "engine":
+      // an engine's picture (dither, cartoon, motion graphics, embeds), filling its box
+      body = (
+        <div style={{ position: "absolute", left: p.x - p.w / 2, top: p.y - p.h / 2, width: p.w, height: p.h, opacity: p.o, filter: blurOf(blur), overflow: "hidden" }}>
+          <EngineView s={c.spec as EngineSpec} t={t} w={p.w} h={p.h} />
+        </div>
+      );
+      break;
     case "assembly": {
       // a component built piece by piece, `w` wide in the world, centred at (x, y)
       const a = c.a as Assembly;

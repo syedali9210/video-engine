@@ -27,7 +27,7 @@ export type Ease = "smooth" | "out" | "in" | "inOut" | "snap" | "back" | "linear
 export type Key = { t: number; e?: Ease; amb?: boolean } & Partial<P>
 
 export type Text = { text: string; size: number; weight?: number; color?: string; align?: "left" | "center" | "right"; top?: boolean; width?: number; tail?: string }
-export type ElKind = "box" | "text" | "mark" | "icon" | "media" | "card" | "panel" | "send" | "cursor" | "chip" | "ring" | "glow" | "assembly"
+export type ElKind = "box" | "text" | "mark" | "icon" | "media" | "card" | "panel" | "send" | "cursor" | "chip" | "ring" | "glow" | "assembly" | "engine"
 export type El = {
   id: string
   kind: ElKind

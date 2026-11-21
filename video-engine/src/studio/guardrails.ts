@@ -9,7 +9,8 @@
 //   read       words stay up long enough to read
 //   still      something is always moving: a frame never sits dead for more than a second
 //   camera     angles a camera would take, never a spin: tilt, turn and roll within bounds, zoom within bounds; and no
-//              angle twice in a film (every scene seen from its own: camera.ts shotFor and angleFor keep to it)
+//              angle twice in a film (every scene seen from its own: camera.ts shotFor and angleFor keep to it); the
+//              opening never turned
 //   blur       soft, never smeared: motion blur and depth of field capped, what the camera follows stays sharp
 //   colour     one hue family, the brand's: no rainbow meshes, no grey-on-grey; grain per scene, light
 //   cuts       a film keeps its signature cut, and never the same cut three times running
@@ -118,6 +119,16 @@ export function judge(g: Graph, p: Plan): Verdict {
       stillFrom = null
     }
     prev = sig
+  }
+  // the opening is never turned: square on all through its own stretch
+  if (p.at.length > 1) {
+    for (let t = 0; t < p.at[1] - p.lead[0]; t += 0.1) {
+      const v = camAt(g.cam, t, undefined, g.lag)
+      if (Math.abs(v.rx) > 0.3 || Math.abs(v.ry) > 0.3 || Math.abs(v.rz) > 0.3) {
+        add({ rule: "camera", level: "error", scene: 0, at: t, text: `the opening is turned (${v.rx.toFixed(1)}°, ${v.ry.toFixed(1)}°, rolled ${v.rz.toFixed(1)}°) at ${t.toFixed(2)} s: it stays square on` })
+        break
+      }
+    }
   }
   // no angle twice (while the film has scenes enough for every one to differ)
   const seen = new Map<string, number>()

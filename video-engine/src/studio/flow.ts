@@ -29,6 +29,10 @@ export type FlowScene = Base &
     /** a component of the product's own, captured whole (its parts marked: public/panel-capture.js), built piece by
         piece (assemble.ts); `w`, `h` its size, `press` the words on the button to press (else its primary one) */
     | { kind: "component"; src: string; w: number; h: number; parts: Part[]; press?: string; radius?: number }
+    /** an engine (engines.ts): dither (subject: butterfly, flower, orb, ripple), cartoon (flower, blob, doodles),
+        mograph (panels; `words` on its buttons, `images` in its panels), or embed (`slots`: engines in styled frames,
+        `layout` full|card|split|grid|pip, `style` glass|flat|device|polaroid) */
+    | { kind: "engine"; engine: "dither" | "cartoon" | "mograph" | "embed"; subject?: string; words?: string[]; images?: string[]; layout?: string; style?: string; slots?: { engine: "dither" | "cartoon" | "mograph" | "satin"; subject?: string }[] }
     | { kind: "app"; media: string; icon?: string; focus?: { x: number; y: number }; aspect?: number }
     | { kind: "tour"; media: string; aspect?: number; stops?: { x: number; y: number; z?: number }[]; press?: { x: number; y: number } }
     | { kind: "orbit"; items: string[]; name: string; logo?: string }
@@ -65,6 +69,8 @@ export function minimum(s: FlowScene, p: Pace) {
       return T + 5.4
     case "component":
       return T + 2.2 + Math.min(4.5, s.parts.length * 0.09)
+    case "engine":
+      return T + (s.engine === "mograph" ? 4.2 : s.engine === "embed" ? 3.6 : 3)
     case "app":
       return T + 2.9
     case "cards":

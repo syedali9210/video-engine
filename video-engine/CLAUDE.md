@@ -21,6 +21,11 @@ next scene, which is everything the generator exists to prevent.
    `{ name, accent: "#rrggbb", tone?: calm|bright|bold, motion?: soft|kinetic|tour|orbit|cta, scenes: [...] }`.
    - **Scene kinds:** `words`, `prompt`, `brand`, `tour`, `component`, `panel`, `app`, `orbit`, `cards`, `stack`, `end`,
      each with a `ground` (`field`, `dark`, `light`, `white` or `image`).
+   - **`engine` scenes** (`src/studio/engines.ts`):
+     - `dither`: butterfly, flower, orb or ripple;
+     - `cartoon`: flower, blob or doodles;
+     - `mograph`: panels, with `words` and `images`;
+     - `embed`: `slots` of engines in a `layout` and `style`.
    - `dur` is a minimum. The generator lengthens every scene until its own animation has finished and held, so never
      shorten one to make a length: change the plan.
    - Example: `.engine-data/films/plans/video-engine-launch-v2.json`.
@@ -57,7 +62,8 @@ Every film is judged against these before it's made:
 - **complete:** a scene plays all its animation, holds, then leaves.
 - **read:** words stay up long enough to read.
 - **still:** nothing sits dead still for more than 1 s.
-- **camera:** at most 14° tilt, 20° turn and 6° roll; zoom 0.5 to 8; no angle twice in a film.
+- **camera:** at most 14° tilt, 20° turn and 6° roll; zoom 0.5 to 8; no angle twice in a film; the opening never
+  turned.
 - **blur:** soft, never smeared.
 - **colour:** one hue family, the brand's (gradients included: a field is satin by default, never a rainbow), with
   grain per scene and light.

@@ -590,6 +590,7 @@ each scene asks for:
   - Angles: front, three-quarter, low, high, dutch, over the shoulder, close, wide.
   - Moves: push, pull, truck, orbit, crane, roll, drift.
   - The shot is chosen by the scene's kind, the style (a style of cuts takes the bolder angles) and a seed.
+  - **The opening is never turned:** it stays square on, and the camera only pushes in.
   - **No angle twice in a film:** every scene is seen from an angle of its own. That includes the product scenes' own
     cameras (a tour, a component being built, a panel), which take theirs from the same library (`angleFor`). The
     judge refuses a repeat.
@@ -610,6 +611,22 @@ function of the clock):
 
 It moves against the camera like every ground. `finish: "matte"` keeps the plain composed field. Every colour stays in
 the brand's hue family: no role turns more than half the guardrail's 40° from it, and the judge checks each gradient.
+
+**Engines** (`src/studio/engines.ts`, drawn by `src/animations/_film/engines.tsx`; an `engine` scene). Whole kinds of
+picture, each a generator and a renderer:
+- **dither:** a butterfly flapping open, a flower unfolding, a lit orb turning or ripples, shaded and drawn in
+  ordered-dither (Bayer 8×8) pixels in two of the brand's colours.
+- **cartoon:** a flat colour with hand-drawn rings or wavy stripes boiling on eights, and a subject:
+  - a flower drawing itself in one white line;
+  - a blob icon popping (squash and stretch) with its arrow;
+  - doodled flowers and cards round the middle.
+- **mograph:** motion graphics in upright panels that slide and resize from beat to beat. The panels hold shapes (a
+  flower, half moons, a square with a question, a circle), the product's pictures, a button that's pressed, and a
+  selection box.
+- **embed:** any of these, or the satin, in styled frames (glass, flat, device, polaroid), laid out full, as a card,
+  side by side, in a grid or picture-in-picture.
+
+`.engine-data/films/plans/engines-demo.json` shows each.
 
 **Backdrops** (`src/studio/backdrop.ts`, drawn by `src/animations/_film/backdrop.tsx`). A scene of words alone stands on
 moving graphics, so it's never a still:

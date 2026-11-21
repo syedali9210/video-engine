@@ -107,6 +107,7 @@ const SHOTS: Record<string, Shot[]> = {
   stack: [{ angle: "high", move: "crane" }, { angle: "threeQuarterR", move: "push" }],
   orbit: [{ angle: "high", move: "roll" }, { angle: "low", move: "orbit" }],
   end: [{ angle: "front", move: "pull" }, { angle: "low", move: "push" }, { angle: "dutchL", move: "roll" }],
+  engine: [{ angle: "close", move: "push" }, { angle: "wide", move: "pull" }, { angle: "high", move: "drift" }, { angle: "threeQuarterL", move: "truck" }, { angle: "low", move: "crane" }],
 }
 const BOLD: AngleName[] = ["dutchL", "dutchR", "shoulderL", "shoulderR", "low"]
 

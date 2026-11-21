@@ -23,6 +23,7 @@ import type { CamKey, Cut, DofKey, Ease, El, Graph, GroundKey, Key } from "./gra
 import { STYLES, styleFor, type Cut as CutKind, type MotionStyle } from "./styles.ts"
 import { ANGLES, angleFor, atCut, inScene, layer, onFocus, shotEnd, shotFor, shotKeys, shotStart, type Angle, type Focus, type Framing, type Shot } from "./camera.ts"
 import { assemble } from "./assemble.ts"
+import { cartoonFor, ditherFor, embedFor, lengthOf as engineLength, mographFor, type EngineSpec } from "./engines.ts"
 import { backdropFor, type BackdropKind } from "./backdrop.ts"
 import { TASTE, judge, type Verdict } from "./guardrails.ts"
 
@@ -38,6 +39,7 @@ export const VARIANTS: Record<FlowScene["kind"], string[]> = {
   brand: ["dot", "rise"],
   panel: ["unfold"],
   component: ["assemble"],
+  engine: ["engine"],
   app: ["icon", "fly"],
   tour: ["tour"],
   orbit: ["orbit"],
@@ -355,11 +357,14 @@ function component(s: Extract<FlowScene, { kind: "component" }>, x: Ctx): Out {
   const cam: CamKey[] = []
   rows.forEach((r, i) => {
     const z = Math.min(fit(Math.max(r.w, s.w * 0.55), r.h), 3.2)
-    cam.push({ t: r.at + (i ? 0.05 : -0.05), x: wx(r.x + r.w / 2), y: wy(r.y + r.h / 2), z, rx: ang.rx + 1, ry: ang.ry + (i % 2 ? 4 : -4), rz: 0, ...(i ? { e: out } : {}) })
+    // (one smooth path through every row as it starts: it carries its speed through each, so it moves with the
+    // formation and never stops to hold)
+    cam.push({ t: r.at + (i ? 0.05 : -0.05), x: wx(r.x + r.w / 2), y: wy(r.y + r.h / 2), z, rx: ang.rx + 1, ry: ang.ry + (i % 2 ? 3 : -3), rz: 0 })
   })
   const zAll = Math.min((0.82 * H) / chh, (0.8 * W) / cw, 1.6)
   const built = Math.max(...a.steps.map((p) => p.at + p.len))
-  cam.push({ t: built + 0.55, x: CX, y: CY, z: zAll, rx: ang.rx, ry: ang.ry * 0.8, rz: 0, e: out })
+  // pulling back as the last pieces land, not after
+  cam.push({ t: Math.max((cam.at(-1)?.t ?? o) + 0.35, built + 0.1), x: CX, y: CY, z: zAll, rx: ang.rx, ry: ang.ry * 0.8, rz: 0 })
   // then drifting in on the whole of it, turning a touch, until the cut takes it
   if (E - 0.02 > built + 0.9) cam.push({ t: E - 0.02, x: CX, y: CY - 6, z: zAll * 1.05, rx: ang.rx * 0.8, ry: ang.ry * 0.55, e: "linear" })
   const els: El[] = [el(id, "assembly", S - T / 2, E + T / 2, 20, [{ t: S - T / 2, x: CX, y: CY, w: cw, h: chh, o: 0 }, { t: o - 0.12, o: 1 }], { src: s.src, a, cw: s.w, ch: s.h })]
@@ -374,6 +379,25 @@ function component(s: Extract<FlowScene, { kind: "component" }>, x: Ctx): Out {
   }
   const rest: Framing = { x: CX, y: CY, z: zAll, rx: ang.rx * 0.8, ry: ang.ry * 0.55 }
   return { els, cam, dof: [{ t: o, k: 0 }, { t: o + 0.6, k: 0.22 }, { t: built + 0.5, k: 0.15 }], enter: [id], leave: [id], done: a.end, frame: rows.length ? { x: cam[0].x!, y: cam[0].y!, z: cam[0].z!, rx: cam[0].rx, ry: cam[0].ry } : rest, exit: rest }
+}
+
+/** an engine's picture (engines.ts: dither, cartoon, motion graphics in panels, or embeds of them in styled frames),
+    made for the brand: full-bleed ones drawn a little over the frame so the camera's angles never show an edge */
+function engineScene(s: Extract<FlowScene, { kind: "engine" }>, x: Ctx): Out {
+  const { S, E, T } = x
+  const o = S + T / 2
+  const seed = hash(x.f.name) + x.i * 17
+  const dur = Math.max(1, E - o)
+  const one = (engine: string, subject?: string, t0 = o): Exclude<EngineSpec, { engine: "embed" }> =>
+    engine === "dither" ? ditherFor({ accent: x.f.accent, subject: subject as never, seed, t0, dur })
+    : engine === "cartoon" ? cartoonFor({ accent: x.f.accent, subject: subject as never, seed, t0, dur })
+    : engine === "mograph" ? mographFor({ accent: x.f.accent, seed, t0, dur, words: s.words, images: s.images })
+    : { engine: "satin", accent: x.f.accent, dark: true }
+  const spec: EngineSpec = s.engine === "embed" ? embedFor({ slots: (s.slots?.length ? s.slots : [{ engine: "dither" as const }, { engine: "cartoon" as const }]).map((k: { engine: string; subject?: string }, j) => one(k.engine, k.subject, o + j * 0.22)), layout: s.layout as never, style: s.style as never, t0: o, dur }) : one(s.engine, s.subject)
+  const full = s.engine !== "embed"
+  const k = full ? 1.22 : 1
+  const id = `en${x.i}`
+  return { els: [el(id, "engine", S - T / 2, E + T / 2, 12, [{ t: S - T / 2, x: CX, y: CY, w: W * k, h: H * k, o: 0 }, { t: o - 0.1, o: 1 }], { spec })], cam: [{ t: o, ...REST }], dof: [{ t: o, k: 0 }], enter: [id], leave: [id], done: o + engineLength(spec), frame: REST, still: true }
 }
 
 /** the product's screen opened from its icon (lifted and tilted, the window swinging in from its corner) or flown in;
@@ -666,6 +690,7 @@ export function compose(f: Flow, st?: Style): Graph & { choices: ReturnType<type
     : s.kind === "brand" ? brand(s, x, f.scenes[i - 1])
     : s.kind === "panel" ? panel(s, x)
     : s.kind === "component" ? component(s, x)
+    : s.kind === "engine" ? engineScene(s, x)
     : s.kind === "app" ? app(s, x)
     : s.kind === "tour" ? tour(s, x)
     : s.kind === "orbit" ? orbit(s, x)
@@ -691,7 +716,8 @@ export function compose(f: Flow, st?: Style): Graph & { choices: ReturnType<type
     const said = s.kind === "words" ? s.text : s.kind === "end" ? `${s.lead} ${s.tail} ${s.swap?.join(" ") ?? ""}` : ""
     if (said) o.done = Math.max(o.done, at[i] + T / 2 + TASTE.read.base + said.split(/\s+/).filter(Boolean).length / TASTE.read.wps - ms.hold)
     // a still scene is seen from an angle, the camera moving through it (a shot: camera.ts)
-    const shot = o.still ? shotFor(s.kind, ms, seed + i * 13, shots[i - 1] ?? undefined, usedAngles) : null
+    // (the opening is never turned: square on, the camera only pushing in; guardrails.ts holds it to that)
+    const shot = !o.still ? null : i === 0 ? ({ angle: "front", move: "push" } as Shot) : shotFor(s.kind, ms, seed + i * 13, shots[i - 1] ?? undefined, usedAngles)
     shots.push(shot)
     // the angle this scene is seen from (a scene that keeps the camera square on is seen from the front)
     const seen = pa ?? shot?.angle ?? (s.kind === "app" ? null : "front")
